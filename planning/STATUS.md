@@ -1,6 +1,6 @@
 # Satstreamr MVP — Progress Tracker
 
-Last updated: 2026-03-22 (Unit 05 complete)
+Last updated: 2026-03-22 (Unit 06 code complete)
 
 ## Legend
 - ✅ Complete
@@ -17,7 +17,7 @@ Last updated: 2026-03-22 (Unit 05 complete)
 | 03 | NUT-11 P2PK CLI Round-Trip Verification | ✅ | Gate 1 — PASSED 2026-03-22; cashu-ts 2.9.0 |
 | 04 | Signaling Server Core | ✅ | WebSocket server (ws); 10 tests passing; port 8080 |
 | 05 | Frontend Scaffold | ✅ | Vite + TS multi-page; SignalingClient; zero build errors |
-| 06 | WebRTC Peer Connection | ⬜ | Gate 2 |
+| 06 | WebRTC Peer Connection | 🔄 | Gate 2 — code complete, pending browser verification |
 | 07 | Data Channel Setup | ⬜ | |
 | 08 | Cashu Wallet Module (browser) | ⬜ | |
 | 09 | WebSocket Reconnect & Session Persistence | ⬜ | |
