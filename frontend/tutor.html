@@ -4,10 +4,56 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Satstreamr — Tutor</title>
+    <style>
+      body { font-family: sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+      video { background: #000; border-radius: 4px; }
+      .video-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem; }
+      .video-wrap { display: flex; flex-direction: column; gap: 0.25rem; }
+      .video-wrap label { font-size: 0.85rem; font-weight: bold; color: #555; }
+      #session-container { margin: 1rem 0; padding: 0.75rem 1rem; background: #f0f4ff; border-radius: 4px; }
+      #session-id { font-family: monospace; font-size: 1.1rem; font-weight: bold; user-select: all; }
+      #error { display: none; margin-top: 1rem; padding: 0.75rem 1rem; background: #fff0f0; color: #c00; border-radius: 4px; }
+    </style>
   </head>
   <body>
-    <h1>Tutor</h1>
+    <h1>Satstreamr — Tutor</h1>
     <p>Status: <span id="status">connecting...</span></p>
+
+    <div id="session-container" style="display:none">
+      <p>Share this session ID with your viewer:</p>
+      <p id="session-id"></p>
+      <p style="font-size:0.85rem;color:#555">Or share the viewer link:
+        <span id="viewer-link"></span>
+      </p>
+    </div>
+
+    <div id="error"></div>
+
+    <div class="video-row">
+      <div class="video-wrap">
+        <label>You (local)</label>
+        <video id="local-video" width="420" height="315" muted autoplay playsinline></video>
+      </div>
+      <div class="video-wrap">
+        <label>Viewer (remote)</label>
+        <video id="remote-video" width="420" height="315" autoplay playsinline></video>
+      </div>
+    </div>
+
     <script type="module" src="/src/pages/tutor.ts"></script>
+    <script type="module">
+      // Populate viewer link once session-id is set
+      const observer = new MutationObserver(() => {
+        const id = document.getElementById('session-id')?.textContent;
+        if (id) {
+          const url = new URL(window.location.href);
+          url.pathname = '/viewer.html';
+          url.search = '?session=' + encodeURIComponent(id);
+          const linkEl = document.getElementById('viewer-link');
+          if (linkEl) linkEl.textContent = url.toString();
+        }
+      });
+      observer.observe(document.getElementById('session-id'), { childList: true, characterData: true, subtree: true });
+    </script>
   </body>
 </html>

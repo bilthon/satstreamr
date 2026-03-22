@@ -4,10 +4,34 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Satstreamr — Viewer</title>
+    <style>
+      body { font-family: sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+      video { background: #000; border-radius: 4px; }
+      .video-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem; }
+      .video-wrap { display: flex; flex-direction: column; gap: 0.25rem; }
+      .video-wrap label { font-size: 0.85rem; font-weight: bold; color: #555; }
+      #session-display { font-size: 0.9rem; color: #555; margin: 0.5rem 0; }
+      #error { display: none; margin-top: 1rem; padding: 0.75rem 1rem; background: #fff0f0; color: #c00; border-radius: 4px; }
+    </style>
   </head>
   <body>
-    <h1>Viewer</h1>
+    <h1>Satstreamr — Viewer</h1>
     <p>Status: <span id="status">connecting...</span></p>
+    <p id="session-display"></p>
+
+    <div id="error"></div>
+
+    <div class="video-row">
+      <div class="video-wrap">
+        <label>Tutor (remote)</label>
+        <video id="remote-video" width="420" height="315" autoplay playsinline></video>
+      </div>
+      <div class="video-wrap">
+        <label>You (local)</label>
+        <video id="local-video" width="420" height="315" muted autoplay playsinline></video>
+      </div>
+    </div>
+
     <script type="module" src="/src/pages/viewer.ts"></script>
   </body>
 </html>
