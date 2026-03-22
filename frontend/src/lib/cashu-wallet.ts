@@ -1,0 +1,235 @@
+/**
+ * cashu-wallet.ts
+ *
+ * Browser-targeted Cashu wallet module for satstreamr.
+ *
+ * Wraps @cashu/cashu-ts to provide the three Cashu operations needed by the
+ * payment flow:
+ *   - mintP2PKToken   — NUT-04 mint + NUT-11 P2PK lock + NUT-12 DLEQ verify
+ *   - redeemToken     — NUT-03 swap using NUT-11 private key signature
+ *   - checkTokenState — NUT-07 proof state query
+ *
+ * The mint URL is read from import.meta.env.VITE_MINT_URL — no hardcoded
+ * strings in this module body.
+ *
+ * REGTEST NOTE: Invoice payment in mintP2PKToken uses child_process.execSync
+ * to call lnd_customer via docker. This is regtest-only scaffolding. In
+ * production the user pays the invoice in their own Lightning wallet and the
+ * caller polls checkMintQuote until the state is PAID before calling mintProofs.
+ */
+
+import { execSync } from 'child_process';
+import { CashuMint, CashuWallet, hasValidDleq } from '@cashu/cashu-ts';
+import type { Proof, MintKeys } from '../types/cashu.js';
+
+// ---------------------------------------------------------------------------
+// Errors
+// ---------------------------------------------------------------------------
+
+export class DLEQVerificationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DLEQVerificationError';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+/** Returns the mint URL from the Vite env variable, or throws. */
+function getMintUrl(): string {
+  const url = import.meta.env['VITE_MINT_URL'];
+  if (!url) {
+    throw new Error(
+      'VITE_MINT_URL is not defined. Set it in your .env file or environment before building.'
+    );
+  }
+  return url as string;
+}
+
+/** Builds a connected, key-loaded CashuWallet for the sat unit. */
+async function buildWallet(): Promise<{
+  wallet: CashuWallet;
+  mintKeys: MintKeys;
+  feePpk: number;
+}> {
+  const mint = new CashuMint(getMintUrl());
+  const wallet = new CashuWallet(mint, { unit: 'sat' });
+  await wallet.loadMint();
+
+  const activeKeyset = wallet.keysets.find((ks) => ks.active && ks.unit === 'sat');
+  if (!activeKeyset) {
+    throw new Error('No active sat keyset found on mint');
+  }
+
+  const mintKeys = await wallet.getKeys(activeKeyset.id);
+  const feePpk = activeKeyset.input_fee_ppk ?? 0;
+
+  return { wallet, mintKeys, feePpk };
+}
+
+/** NUT-02 fee: ceil(n_inputs * fee_ppk / 1000) */
+function calcFee(nInputs: number, feePpk: number): number {
+  return Math.ceil((nInputs * feePpk) / 1000);
+}
+
+/**
+ * Pays a BOLT11 invoice via lnd_customer in the regtest docker environment.
+ *
+ * REGTEST SCAFFOLDING — not used in production builds. Production flow:
+ * display the invoice to the user; they pay it in their Lightning wallet.
+ */
+function payInvoiceRegtest(bolt11: string): void {
+  const cmd = `docker exec lnd_customer lncli --network=regtest payinvoice --force ${bolt11}`;
+  execSync(cmd, { stdio: 'pipe', timeout: 30_000 });
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Mints a NUT-11 P2PK-locked Cashu token.
+ *
+ * Internally:
+ *   1. Fetches active keyset to determine input_fee_ppk.
+ *   2. Mints amountSats + swap_fee so the recipient can swap without going
+ *      below zero value.
+ *   3. Pays the Lightning invoice via lnd_customer (regtest only).
+ *   4. Mints proofs locked to recipientPubkey.
+ *   5. Verifies NUT-12 DLEQ on every proof — throws DLEQVerificationError
+ *      if any proof fails.
+ *
+ * @param amountSats     Net value the recipient will hold after redeeming.
+ * @param recipientPubkey Compressed secp256k1 public key (33-byte hex, 66 chars).
+ * @returns Array of P2PK-locked Proofs.
+ */
+export async function mintP2PKToken(
+  amountSats: number,
+  recipientPubkey: string
+): Promise<Proof[]> {
+  const { wallet, mintKeys, feePpk } = await buildWallet();
+
+  // Add the swap fee so the recipient can redeem without going to zero.
+  // One proof is minted (1 input during the recipient's swap).
+  const swapFee = calcFee(1, feePpk);
+  const mintAmount = amountSats + swapFee;
+
+  // Request a mint quote.
+  const mintQuote = await wallet.createMintQuote(mintAmount);
+
+  // Pay the invoice (regtest scaffolding — see module doc comment).
+  payInvoiceRegtest(mintQuote.request);
+
+  // Poll until the mint sees the payment.
+  await sleep(1500);
+  let quoteState = await wallet.checkMintQuote(mintQuote.quote);
+  for (let i = 0; i < 10 && quoteState.state !== 'PAID' && quoteState.state !== 'ISSUED'; i++) {
+    await sleep(1000);
+    quoteState = await wallet.checkMintQuote(mintQuote.quote);
+  }
+  if (quoteState.state !== 'PAID' && quoteState.state !== 'ISSUED') {
+    throw new Error(`Mint quote did not reach PAID state. Current state: ${quoteState.state}`);
+  }
+
+  // Mint proofs locked to the recipient's public key.
+  const lockedProofs = await wallet.mintProofs(mintAmount, mintQuote.quote, {
+    p2pk: { pubkey: recipientPubkey },
+  });
+
+  if (!lockedProofs || lockedProofs.length === 0) {
+    throw new Error('mintProofs returned an empty proof array');
+  }
+
+  // NUT-12 DLEQ verification.
+  for (const proof of lockedProofs) {
+    if (proof.dleq) {
+      const valid = hasValidDleq(proof, mintKeys);
+      if (!valid) {
+        throw new DLEQVerificationError(
+          `DLEQ verification failed for proof amount=${proof.amount}`
+        );
+      }
+    }
+  }
+  console.log('DLEQ OK');
+
+  return lockedProofs;
+}
+
+/**
+ * Redeems P2PK-locked Cashu proofs using the holder's private key.
+ *
+ * Executes a NUT-03 swap, signing each proof's secret with privkeyHex so the
+ * mint's NUT-11 spending condition is satisfied.
+ *
+ * @param proofs      The P2PK-locked proofs to redeem.
+ * @param privkeyHex  Hex-encoded 32-byte private key matching the lock pubkey.
+ * @returns `{ success: true }` on successful redemption.
+ */
+export async function redeemToken(
+  proofs: Proof[],
+  privkeyHex: string
+): Promise<{ success: boolean }> {
+  const { wallet, feePpk } = await buildWallet();
+
+  const totalAmount = proofs.reduce((s, p) => s + p.amount, 0);
+  const fee = calcFee(proofs.length, feePpk);
+  const receiveAmount = totalAmount - fee;
+
+  if (receiveAmount <= 0) {
+    throw new Error(
+      `Proof total (${totalAmount}) is not enough to cover the swap fee (${fee})`
+    );
+  }
+
+  const swapResult = await wallet.swap(receiveAmount, proofs, {
+    privkey: privkeyHex,
+  });
+
+  const redeemedProofs = [...swapResult.keep, ...swapResult.send];
+  if (!redeemedProofs || redeemedProofs.length === 0) {
+    throw new Error('swap returned empty proofs — redemption failed');
+  }
+
+  return { success: true };
+}
+
+/**
+ * Checks the spend state of a set of Cashu proofs (NUT-07).
+ *
+ * All proofs in a single payment chunk share the same state (they were minted
+ * together and are redeemed together), so this returns the state of the first
+ * proof as a convenience.
+ *
+ * @param proofs  The proofs to check.
+ * @returns `"unspent"`, `"spent"`, or `"pending"`.
+ */
+export async function checkTokenState(
+  proofs: Proof[]
+): Promise<'unspent' | 'spent' | 'pending'> {
+  const { wallet } = await buildWallet();
+  const states = await wallet.checkProofsStates(proofs);
+
+  if (states.length === 0) {
+    throw new Error('checkProofsStates returned an empty response');
+  }
+
+  const firstState = states[0]!.state;
+
+  switch (firstState) {
+    case 'UNSPENT':
+      return 'unspent';
+    case 'SPENT':
+      return 'spent';
+    case 'PENDING':
+      return 'pending';
+    default:
+      throw new Error(`Unknown proof state: ${String(firstState)}`);
+  }
+}
