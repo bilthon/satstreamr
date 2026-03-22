@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from 'vite'
 import { resolve } from 'path'
 import { fileURLToPath } from 'url'
@@ -11,6 +12,12 @@ export default defineConfig({
         tutor: resolve(__dirname, 'tutor.html'),
         viewer: resolve(__dirname, 'viewer.html'),
       }
+    }
+  },
+  test: {
+    environment: 'node',
+    env: {
+      VITE_MINT_URL: 'http://localhost:3338'
     }
   }
 })

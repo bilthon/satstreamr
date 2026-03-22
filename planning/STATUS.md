@@ -19,7 +19,7 @@ Last updated: 2026-03-22 (Unit 05 complete)
 | 05 | Frontend Scaffold | ✅ | Vite + TS multi-page; SignalingClient; zero build errors |
 | 06 | WebRTC Peer Connection | ⬜ | Gate 2 |
 | 07 | Data Channel Setup | ⬜ | |
-| 08 | Cashu Wallet Module (browser) | ⬜ | |
+| 08 | Cashu Wallet Module (browser) | 🔄 | 4 integration tests passing; PR pending merge |
 | 09 | WebSocket Reconnect & Session Persistence | ⬜ | |
 | 10 | Token Transfer over Data Channel | ⬜ | Gate 3 |
 | 11 | Payment Scheduler | ⬜ | Gate 4 |
