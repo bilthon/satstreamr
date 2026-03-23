@@ -12,13 +12,13 @@
  * The mint URL is read from import.meta.env.VITE_MINT_URL — no hardcoded
  * strings in this module body.
  *
- * REGTEST NOTE: Invoice payment in mintP2PKToken uses child_process.execSync
- * to call lnd_customer via docker. This is regtest-only scaffolding. In
- * production the user pays the invoice in their own Lightning wallet and the
- * caller polls checkMintQuote until the state is PAID before calling mintProofs.
+ * REGTEST NOTE: Invoice payment in mintP2PKToken uses the LND REST API
+ * (proxied through Vite's dev server at /lnd-customer) to pay the invoice
+ * automatically. This is regtest-only scaffolding. In production the user
+ * pays the invoice in their own Lightning wallet and the caller polls
+ * checkMintQuote until the state is PAID before calling mintProofs.
  */
 
-import { execSync } from 'child_process';
 import { CashuMint, CashuWallet, hasValidDleq } from '@cashu/cashu-ts';
 import type { Proof, MintKeys } from '../types/cashu.js';
 
@@ -75,14 +75,39 @@ function calcFee(nInputs: number, feePpk: number): number {
 }
 
 /**
- * Pays a BOLT11 invoice via lnd_customer in the regtest docker environment.
+ * Pays a BOLT11 invoice via the LND REST API proxied through Vite's dev server.
  *
- * REGTEST SCAFFOLDING — not used in production builds. Production flow:
- * display the invoice to the user; they pay it in their Lightning wallet.
+ * REGTEST SCAFFOLDING — only called inside `if (import.meta.env.DEV)` guards.
+ * Production flow: display the invoice to the user; they pay it in their own
+ * Lightning wallet.
+ *
+ * Proxy: Vite forwards /lnd-customer/* → https://localhost:8082/* (secure: false)
+ * so TLS certificate errors from the self-signed LND cert are bypassed in dev.
  */
-function payInvoiceRegtest(bolt11: string): void {
-  const cmd = `docker exec lnd_customer lncli --network=regtest payinvoice --force ${bolt11}`;
-  execSync(cmd, { stdio: 'pipe', timeout: 30_000 });
+async function payInvoiceRegtest(bolt11: string): Promise<void> {
+  const macaroon = import.meta.env['VITE_LND_CUSTOMER_MACAROON_HEX'] as string | undefined;
+  if (!macaroon) {
+    throw new Error(
+      'VITE_LND_CUSTOMER_MACAROON_HEX is not defined. ' +
+      'Set it in your .env file for regtest invoice auto-payment.'
+    );
+  }
+
+  const response = await fetch('/lnd-customer/v1/channels/transactions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Grpc-Metadata-macaroon': macaroon,
+    },
+    body: JSON.stringify({ payment_request: bolt11 }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '(no body)');
+    throw new Error(
+      `LND payinvoice failed: HTTP ${response.status} — ${text}`
+    );
+  }
 }
 
 function sleep(ms: number): Promise<void> {
@@ -124,7 +149,9 @@ export async function mintP2PKToken(
   const mintQuote = await wallet.createMintQuote(mintAmount);
 
   // Pay the invoice (regtest scaffolding — see module doc comment).
-  payInvoiceRegtest(mintQuote.request);
+  if (import.meta.env.DEV) {
+    await payInvoiceRegtest(mintQuote.request);
+  }
 
   // Poll until the mint sees the payment.
   await sleep(1500);
