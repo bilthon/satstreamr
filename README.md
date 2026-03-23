@@ -16,6 +16,11 @@ Viewers pay tutors/educators in real time using Cashu tokens sent over a WebRTC 
 - **Signaling server** ([satstreamr-signaling](https://github.com/bilthon/satstreamr-signaling)): Node.js WebSocket server for WebRTC session negotiation
 - **Cashu mint**: [Nutshell](https://github.com/cashubtc/nutshell) connected to LND on regtest
 
+## Development
+
+For frontend developer setup and the Gate 2 WebRTC peer-connection test, see
+[`frontend/DEV.md`](frontend/DEV.md).
+
 ## Getting Started
 
 See `infra/README-polar.md` for the regtest environment setup.
