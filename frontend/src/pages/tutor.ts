@@ -2,6 +2,7 @@ import { SignalingClient } from '../signaling-client.js';
 import { PeerConnection } from '../lib/peer-connection.js';
 import { DataChannel } from '../lib/data-channel.js';
 import type { SignalingMessage } from '../types/signaling.js';
+import { saveSession, loadSession } from '../lib/session-storage.js';
 
 const signalingUrl = (import.meta.env['VITE_SIGNALING_URL'] as string | undefined) ?? 'ws://localhost:8080';
 
@@ -15,6 +16,24 @@ const sessionContainerEl = document.getElementById('session-container');
 const localVideoEl = document.getElementById('local-video') as HTMLVideoElement | null;
 const errorEl = document.getElementById('error');
 const dcStatusEl = document.getElementById('dc-status');
+
+// Reconnect overlay — inserted programmatically so it works without HTML changes
+const reconnectOverlayEl = document.createElement('div');
+reconnectOverlayEl.id = 'reconnect-overlay';
+reconnectOverlayEl.style.cssText =
+  'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);' +
+  'color:#fff;font-size:1.5rem;display:flex;align-items:center;' +
+  'justify-content:center;z-index:9999;';
+reconnectOverlayEl.textContent = 'reconnecting\u2026';
+document.body.appendChild(reconnectOverlayEl);
+
+function showReconnectOverlay(): void {
+  reconnectOverlayEl.style.display = 'flex';
+}
+
+function hideReconnectOverlay(): void {
+  reconnectOverlayEl.style.display = 'none';
+}
 
 function setStatus(text: string): void {
   if (statusEl !== null) {
@@ -53,11 +72,33 @@ const client = new SignalingClient(signalingUrl);
 
 client.onConnect(() => {
   setStatus('connected — creating session…');
-  client.send({ type: 'create_session' });
+  // tutorPubkey is populated by Unit 10; pass empty string as placeholder until then
+  client.send({ type: 'create_session', tutorPubkey: '' });
+});
+
+client.onDisconnecting(() => {
+  showReconnectOverlay();
+  setStatus('reconnecting\u2026');
 });
 
 client.onDisconnect(() => {
   setStatus('disconnected');
+});
+
+client.onReconnected(() => {
+  hideReconnectOverlay();
+  const saved = loadSession();
+  if (saved !== null) {
+    setStatus(`reconnected — session ${saved.sessionId}`);
+    if (sessionIdEl !== null) {
+      sessionIdEl.textContent = saved.sessionId;
+    }
+    if (sessionContainerEl !== null) {
+      sessionContainerEl.style.display = 'block';
+    }
+  } else {
+    setStatus('reconnected');
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -145,6 +186,17 @@ client.onMessage((msg: SignalingMessage) => {
 function handleSessionCreated(id: string): void {
   sessionId = id;
   console.log('[tutor] session created:', id);
+
+  // Persist session state for reconnect recovery
+  client.setSessionId(id);
+  saveSession({
+    sessionId: id,
+    peerId: '',
+    role: 'tutor',
+    chunkCount: 0,
+    totalSatsPaid: 0,
+    budgetRemaining: 0,
+  });
 
   if (sessionIdEl !== null) {
     sessionIdEl.textContent = id;
