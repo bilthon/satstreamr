@@ -67,8 +67,28 @@ export class PeerConnection {
   }
 
   /**
+   * Creates the payment data channel on the tutor side.
+   * MUST be called before createOffer() so the channel is negotiated in the initial SDP exchange.
+   * Fires onDataChannel with a synthetic RTCDataChannelEvent once the channel opens.
+   */
+  createPaymentChannel(): RTCDataChannel {
+    const channel = this.pc.createDataChannel('payment', { ordered: true });
+    console.log('[peer] payment data channel created');
+
+    channel.onopen = () => {
+      console.log('[peer] payment data channel open');
+      // Synthesise an RTCDataChannelEvent and fire the existing onDataChannel callback.
+      const event = new RTCDataChannelEvent('datachannel', { channel });
+      this.onDataChannel?.(event);
+    };
+
+    return channel;
+  }
+
+  /**
    * Adds all tracks from stream and creates an SDP offer.
    * Call this on the tutor side after viewer_joined.
+   * Ensure createPaymentChannel() has been called first.
    */
   async createOffer(stream: MediaStream): Promise<RTCSessionDescriptionInit> {
     for (const track of stream.getTracks()) {

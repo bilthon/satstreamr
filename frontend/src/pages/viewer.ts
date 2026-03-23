@@ -1,5 +1,6 @@
 import { SignalingClient } from '../signaling-client.js';
 import { PeerConnection } from '../lib/peer-connection.js';
+import { DataChannel } from '../lib/data-channel.js';
 import type { SignalingMessage } from '../types/signaling.js';
 
 const signalingUrl = (import.meta.env['VITE_SIGNALING_URL'] as string | undefined) ?? 'ws://localhost:8080';
@@ -13,6 +14,7 @@ const localVideoEl = document.getElementById('local-video') as HTMLVideoElement 
 const remoteVideoEl = document.getElementById('remote-video') as HTMLVideoElement | null;
 const errorEl = document.getElementById('error');
 const sessionDisplayEl = document.getElementById('session-display');
+const dcStatusEl = document.getElementById('dc-status');
 
 function setStatus(text: string): void {
   if (statusEl !== null) {
@@ -25,6 +27,12 @@ function showError(text: string): void {
   if (errorEl !== null) {
     errorEl.textContent = text;
     errorEl.style.display = 'block';
+  }
+}
+
+function setDcStatus(text: string): void {
+  if (dcStatusEl !== null) {
+    dcStatusEl.textContent = `payment channel: ${text}`;
   }
 }
 
@@ -44,6 +52,7 @@ if (sessionDisplayEl !== null) {
 // ---------------------------------------------------------------------------
 
 let localStream: MediaStream | null = null;
+let dataChannel: DataChannel | null = null;
 const peer = new PeerConnection();
 
 // ---------------------------------------------------------------------------
@@ -85,6 +94,31 @@ peer.onIceCandidate((candidate) => {
 
 peer.onIceStateChange = (state) => {
   setStatus(`ICE connection state: ${state}`);
+};
+
+// ---------------------------------------------------------------------------
+// Data channel
+// ---------------------------------------------------------------------------
+
+peer.onDataChannel = (event) => {
+  const rawChannel = event.channel;
+
+  // ondatachannel fires when the channel is received but it may still be
+  // in 'connecting' state. Wait for 'open' before marking ready.
+  rawChannel.onopen = () => {
+    dataChannel = new DataChannel(rawChannel);
+    console.log('[datachannel] open');
+    setDcStatus('open');
+
+    dataChannel.onMessage((msg) => {
+      console.log('[viewer] data channel message received:', msg);
+    });
+  };
+
+  rawChannel.onclose = () => {
+    console.log('[datachannel] closed');
+    setDcStatus('closed');
+  };
 };
 
 // ---------------------------------------------------------------------------

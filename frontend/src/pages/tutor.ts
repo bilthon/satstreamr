@@ -1,5 +1,6 @@
 import { SignalingClient } from '../signaling-client.js';
 import { PeerConnection } from '../lib/peer-connection.js';
+import { DataChannel } from '../lib/data-channel.js';
 import type { SignalingMessage } from '../types/signaling.js';
 
 const signalingUrl = (import.meta.env['VITE_SIGNALING_URL'] as string | undefined) ?? 'ws://localhost:8080';
@@ -13,6 +14,7 @@ const sessionIdEl = document.getElementById('session-id');
 const sessionContainerEl = document.getElementById('session-container');
 const localVideoEl = document.getElementById('local-video') as HTMLVideoElement | null;
 const errorEl = document.getElementById('error');
+const dcStatusEl = document.getElementById('dc-status');
 
 function setStatus(text: string): void {
   if (statusEl !== null) {
@@ -28,12 +30,19 @@ function showError(text: string): void {
   }
 }
 
+function setDcStatus(text: string): void {
+  if (dcStatusEl !== null) {
+    dcStatusEl.textContent = `payment channel: ${text}`;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
 let sessionId: string | null = null;
 let localStream: MediaStream | null = null;
+let dataChannel: DataChannel | null = null;
 const peer = new PeerConnection();
 
 // ---------------------------------------------------------------------------
@@ -69,6 +78,25 @@ peer.onIceCandidate((candidate) => {
 
 peer.onIceStateChange = (state) => {
   setStatus(`ICE connection state: ${state}`);
+};
+
+// ---------------------------------------------------------------------------
+// Data channel
+// ---------------------------------------------------------------------------
+
+peer.onDataChannel = (event) => {
+  dataChannel = new DataChannel(event.channel);
+  console.log('[datachannel] open');
+  setDcStatus('open');
+
+  event.channel.onclose = () => {
+    console.log('[datachannel] closed');
+    setDcStatus('closed');
+  };
+
+  dataChannel.onMessage((msg) => {
+    console.log('[tutor] data channel message received:', msg);
+  });
 };
 
 // ---------------------------------------------------------------------------
@@ -156,6 +184,11 @@ async function handleViewerJoined(): Promise<void> {
   setStatus('viewer joined — creating offer…');
 
   try {
+    // Create the payment data channel BEFORE createOffer() so it is negotiated
+    // in the initial SDP exchange and no renegotiation is required.
+    peer.createPaymentChannel();
+    setDcStatus('connecting…');
+
     const offer = await peer.createOffer(localStream);
     client.send({ type: 'offer', sessionId, sdp: offer });
     setStatus('offer sent — waiting for answer…');

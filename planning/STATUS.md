@@ -1,6 +1,6 @@
 # Satstreamr MVP — Progress Tracker
 
-Last updated: 2026-03-22 (Unit 06 code complete)
+Last updated: 2026-03-22 (Gate 2 passed)
 
 ## Legend
 - ✅ Complete
@@ -17,9 +17,9 @@ Last updated: 2026-03-22 (Unit 06 code complete)
 | 03 | NUT-11 P2PK CLI Round-Trip Verification | ✅ | Gate 1 — PASSED 2026-03-22; cashu-ts 2.9.0 |
 | 04 | Signaling Server Core | ✅ | WebSocket server (ws); 10 tests passing; port 8080 |
 | 05 | Frontend Scaffold | ✅ | Vite + TS multi-page; SignalingClient; zero build errors |
-| 06 | WebRTC Peer Connection | 🔄 | Gate 2 — code complete, pending browser verification |
-| 07 | Data Channel Setup | ⬜ | |
-| 08 | Cashu Wallet Module (browser) | 🔄 | 4 integration tests passing; PR pending merge |
+| 06 | WebRTC Peer Connection | ✅ | Gate 2 — PASSED 2026-03-22; ICE connected in two browser tabs |
+| 07 | Data Channel Setup | 🔄 | In progress |
+| 08 | Cashu Wallet Module (browser) | ✅ | 4 integration tests passing; merged |
 | 09 | WebSocket Reconnect & Session Persistence | ⬜ | |
 | 10 | Token Transfer over Data Channel | ⬜ | Gate 3 |
 | 11 | Payment Scheduler | ⬜ | Gate 4 |
@@ -39,7 +39,7 @@ Last updated: 2026-03-22 (Unit 06 code complete)
 | Gate | Unit | Condition | Status |
 |------|------|-----------|--------|
 | 1 | 03 | NUT-11 P2PK round-trip passes on live mint | ✅ |
-| 2 | 06 | WebRTC peer connection established between two browser tabs | ⬜ |
+| 2 | 06 | WebRTC peer connection established between two browser tabs | ✅ |
 | 3 | 10 | Cashu token delivered over data channel, verified by recipient | ⬜ |
 | 4 | 11 | Payment scheduler runs for 60s without missed chunks | ⬜ |
 
