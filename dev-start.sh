@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+echo "satstreamr dev environment"
+echo ""
+echo "Terminal 1 — Signaling server:"
+echo "  cd ../satstreamr-signaling/signaling && node dist/server.js"
+echo ""
+echo "  (If dist/ does not exist yet, run 'npm run build' first.)"
+echo "  (Or skip the build entirely with: npm run dev)"
+echo ""
+echo "Terminal 2 — Frontend:"
+echo "  cd frontend && npm run dev"
+echo ""
+echo "Then open: http://localhost:5173/tutor.html"
