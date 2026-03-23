@@ -9,7 +9,8 @@
     "test": "vitest run --reporter=verbose"
   },
   "dependencies": {
-    "@cashu/cashu-ts": "^2.9.0"
+    "@cashu/cashu-ts": "^2.9.0",
+    "@noble/curves": "^2.0.1"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",

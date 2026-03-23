@@ -1,6 +1,10 @@
+import { secp256k1 } from '@noble/curves/secp256k1.js';
+import { bytesToHex } from '@noble/curves/utils.js';
+import { getDecodedToken } from '@cashu/cashu-ts';
 import { SignalingClient } from '../signaling-client.js';
 import { PeerConnection } from '../lib/peer-connection.js';
 import { DataChannel } from '../lib/data-channel.js';
+import { checkTokenState, redeemToken } from '../lib/cashu-wallet.js';
 import type { SignalingMessage } from '../types/signaling.js';
 import { saveSession, loadSession } from '../lib/session-storage.js';
 
@@ -17,7 +21,7 @@ const localVideoEl = document.getElementById('local-video') as HTMLVideoElement 
 const errorEl = document.getElementById('error');
 const dcStatusEl = document.getElementById('dc-status');
 
-// Reconnect overlay — inserted programmatically so it works without HTML changes
+// Reconnect overlay -- inserted programmatically so it works without HTML changes
 const reconnectOverlayEl = document.createElement('div');
 reconnectOverlayEl.id = 'reconnect-overlay';
 reconnectOverlayEl.style.cssText =
@@ -56,6 +60,32 @@ function setDcStatus(text: string): void {
 }
 
 // ---------------------------------------------------------------------------
+// Keypair generation (Unit 10)
+// ---------------------------------------------------------------------------
+
+const PRIVKEY_STORAGE_KEY = 'tutor_privkey';
+
+/** Generate or restore the tutor's secp256k1 keypair from sessionStorage. */
+function getOrGenerateKeypair(): { privkeyHex: string; pubkeyHex: string } {
+  const stored = sessionStorage.getItem(PRIVKEY_STORAGE_KEY);
+  if (stored !== null) {
+    const privBytes = Uint8Array.from(
+      (stored.match(/.{2}/g) ?? []).map((b) => parseInt(b, 16)),
+    );
+    const pubkeyBytes = secp256k1.getPublicKey(privBytes, true);
+    return { privkeyHex: stored, pubkeyHex: bytesToHex(pubkeyBytes) };
+  }
+  const { secretKey, publicKey } = secp256k1.keygen();
+  const privkeyHex = bytesToHex(secretKey);
+  const pubkeyHex = bytesToHex(publicKey);
+  sessionStorage.setItem(PRIVKEY_STORAGE_KEY, privkeyHex);
+  return { privkeyHex, pubkeyHex };
+}
+
+const { privkeyHex: tutorPrivkeyHex, pubkeyHex: tutorPubkeyHex } = getOrGenerateKeypair();
+console.log('[tutor] pubkey:', tutorPubkeyHex);
+
+// ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
@@ -64,6 +94,9 @@ let localStream: MediaStream | null = null;
 let dataChannel: DataChannel | null = null;
 const peer = new PeerConnection();
 
+/** Last chunkId successfully processed. Starts at -1 so first chunkId=0 is valid. */
+let lastSeenChunkId = -1;
+
 // ---------------------------------------------------------------------------
 // Signaling client
 // ---------------------------------------------------------------------------
@@ -71,9 +104,8 @@ const peer = new PeerConnection();
 const client = new SignalingClient(signalingUrl);
 
 client.onConnect(() => {
-  setStatus('connected — creating session…');
-  // tutorPubkey is populated by Unit 10; pass empty string as placeholder until then
-  client.send({ type: 'create_session', tutorPubkey: '' });
+  setStatus('connected -- creating session\u2026');
+  client.send({ type: 'create_session', tutorPubkey: tutorPubkeyHex });
 });
 
 client.onDisconnecting(() => {
@@ -89,7 +121,7 @@ client.onReconnected(() => {
   hideReconnectOverlay();
   const saved = loadSession();
   if (saved !== null) {
-    setStatus(`reconnected — session ${saved.sessionId}`);
+    setStatus(`reconnected -- session ${saved.sessionId}`);
     if (sessionIdEl !== null) {
       sessionIdEl.textContent = saved.sessionId;
     }
@@ -107,7 +139,7 @@ client.onReconnected(() => {
 
 peer.onIceCandidate((candidate) => {
   if (sessionId === null) {
-    console.warn('[tutor] ICE candidate arrived but no sessionId yet — dropping');
+    console.warn('[tutor] ICE candidate arrived but no sessionId yet -- dropping');
     return;
   }
   client.send({ type: 'ice_candidate', sessionId, candidate });
@@ -122,7 +154,7 @@ peer.onIceStateChange = (state) => {
 };
 
 // ---------------------------------------------------------------------------
-// Data channel
+// Data channel -- token receipt, verify, ack/nack (Unit 10)
 // ---------------------------------------------------------------------------
 
 peer.onDataChannel = (event) => {
@@ -136,16 +168,74 @@ peer.onDataChannel = (event) => {
   };
 
   dataChannel.onMessage((msg) => {
-    console.log('[tutor] data channel message received:', msg);
+    if (msg.type !== 'token_payment') {
+      console.log('[tutor] data channel message received:', msg);
+      return;
+    }
+
+    const { chunkId, encodedToken } = msg;
+
+    // Validate chunkId is strictly greater than last seen
+    if (chunkId <= lastSeenChunkId) {
+      console.warn(
+        `[payment] duplicate/out-of-order chunk #${chunkId} (last seen: ${lastSeenChunkId}) -- nack`,
+      );
+      dataChannel?.sendMessage({ type: 'payment_nack', chunkId, reason: 'duplicate_chunk_id' });
+      return;
+    }
+
+    void handleTokenPayment(chunkId, encodedToken);
   });
 };
 
+async function handleTokenPayment(chunkId: number, encodedToken: string): Promise<void> {
+  if (dataChannel === null) return;
+
+  // 1. Decode the token
+  let proofs: ReturnType<typeof getDecodedToken>['proofs'];
+  try {
+    const decoded = getDecodedToken(encodedToken);
+    proofs = decoded.proofs;
+  } catch (err: unknown) {
+    const reason = err instanceof Error ? err.message : String(err);
+    console.error(`[payment] failed to decode token for chunk #${chunkId}:`, reason);
+    dataChannel.sendMessage({ type: 'payment_nack', chunkId, reason: `decode_error: ${reason}` });
+    return;
+  }
+
+  // 2. NUT-07 state check -- belt-and-suspenders double-spend detection
+  try {
+    const state = await checkTokenState(proofs);
+    if (state === 'spent') {
+      console.warn(`[payment] chunk #${chunkId} already spent -- nack`);
+      dataChannel.sendMessage({ type: 'payment_nack', chunkId, reason: 'double_spend' });
+      return;
+    }
+  } catch (err: unknown) {
+    const reason = err instanceof Error ? err.message : String(err);
+    console.error(`[payment] checkTokenState failed for chunk #${chunkId}:`, reason);
+    dataChannel.sendMessage({ type: 'payment_nack', chunkId, reason: `state_check_error: ${reason}` });
+    return;
+  }
+
+  // 3. Redeem (NUT-03 swap with NUT-11 P2PK signature)
+  try {
+    await redeemToken(proofs, tutorPrivkeyHex);
+    lastSeenChunkId = chunkId;
+    console.log(`[payment] ack #${chunkId}`);
+    dataChannel.sendMessage({ type: 'payment_ack', chunkId });
+  } catch (err: unknown) {
+    const reason = err instanceof Error ? err.message : String(err);
+    console.error(`[payment] redeemToken failed for chunk #${chunkId}:`, reason);
+    dataChannel.sendMessage({ type: 'payment_nack', chunkId, reason });
+  }
+}
+
 // ---------------------------------------------------------------------------
-// Remote track → remote video
+// Remote track -> remote video
 // ---------------------------------------------------------------------------
 
 peer.onTrack = (event) => {
-  // Tutor can optionally display the viewer's video in a remote-video element.
   const remoteVideoEl = document.getElementById('remote-video') as HTMLVideoElement | null;
   if (remoteVideoEl !== null && event.streams[0] !== undefined) {
     remoteVideoEl.srcObject = event.streams[0];
@@ -187,7 +277,6 @@ function handleSessionCreated(id: string): void {
   sessionId = id;
   console.log('[tutor] session created:', id);
 
-  // Persist session state for reconnect recovery
   client.setSessionId(id);
   saveSession({
     sessionId: id,
@@ -205,9 +294,8 @@ function handleSessionCreated(id: string): void {
     sessionContainerEl.style.display = 'block';
   }
 
-  setStatus('session created — waiting for viewer…');
+  setStatus('session created -- waiting for viewer\u2026');
 
-  // Start media immediately so the tutor can see themselves while waiting.
   void startMedia();
 }
 
@@ -233,17 +321,17 @@ async function handleViewerJoined(): Promise<void> {
     return;
   }
 
-  setStatus('viewer joined — creating offer…');
+  setStatus('viewer joined -- creating offer\u2026');
 
   try {
     // Create the payment data channel BEFORE createOffer() so it is negotiated
     // in the initial SDP exchange and no renegotiation is required.
     peer.createPaymentChannel();
-    setDcStatus('connecting…');
+    setDcStatus('connecting\u2026');
 
     const offer = await peer.createOffer(localStream);
     client.send({ type: 'offer', sessionId, sdp: offer });
-    setStatus('offer sent — waiting for answer…');
+    setStatus('offer sent -- waiting for answer\u2026');
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     showError(`Failed to create offer: ${message}`);

@@ -2,7 +2,11 @@
   "compilerOptions": {
     "target": "ES2022",
     "useDefineForClassFields": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
@@ -17,7 +21,17 @@
     "exactOptionalPropertyTypes": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "@noble/curves/secp256k1.js": [
+        "./node_modules/@noble/curves/secp256k1.d.ts"
+      ],
+      "@noble/curves/utils.js": [
+        "./node_modules/@noble/curves/utils.d.ts"
+      ]
+    }
   },
-  "include": ["src"]
+  "include": [
+    "src"
+  ]
 }

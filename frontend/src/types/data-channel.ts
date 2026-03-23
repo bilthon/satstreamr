@@ -1,14 +1,14 @@
 /**
  * Discriminated union of all messages sent over the WebRTC payment data channel.
  *
- * Viewer → Tutor: token_payment
- * Tutor → Viewer: payment_ack | payment_nack
+ * Viewer -> Tutor: token_payment
+ * Tutor -> Viewer: payment_ack | payment_nack
  */
 
 export type TokenPaymentMessage = {
   type: 'token_payment';
   chunkId: number;
-  proofs: unknown[]; // Proof[] from cashu-ts — typed as unknown here to avoid circular deps
+  encodedToken: string; // cashu-ts getEncodedToken() output
 };
 
 export type PaymentAckMessage = {

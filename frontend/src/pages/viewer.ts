@@ -1,10 +1,13 @@
+import { getEncodedToken } from '@cashu/cashu-ts';
 import { SignalingClient } from '../signaling-client.js';
 import { PeerConnection } from '../lib/peer-connection.js';
 import { DataChannel } from '../lib/data-channel.js';
+import { mintP2PKToken } from '../lib/cashu-wallet.js';
 import type { SignalingMessage } from '../types/signaling.js';
 import { saveSession, loadSession } from '../lib/session-storage.js';
 
 const signalingUrl = (import.meta.env['VITE_SIGNALING_URL'] as string | undefined) ?? 'ws://localhost:8080';
+const mintUrl = (import.meta.env['VITE_MINT_URL'] as string | undefined) ?? '';
 
 // ---------------------------------------------------------------------------
 // UI element references
@@ -17,7 +20,7 @@ const errorEl = document.getElementById('error');
 const sessionDisplayEl = document.getElementById('session-display');
 const dcStatusEl = document.getElementById('dc-status');
 
-// Reconnect overlay — inserted programmatically so it works without HTML changes
+// Reconnect overlay -- inserted programmatically so it works without HTML changes
 const reconnectOverlayEl = document.createElement('div');
 reconnectOverlayEl.id = 'reconnect-overlay';
 reconnectOverlayEl.style.cssText =
@@ -74,6 +77,63 @@ let localStream: MediaStream | null = null;
 let dataChannel: DataChannel | null = null;
 const peer = new PeerConnection();
 
+/** Tutor's compressed secp256k1 pubkey received via signaling. */
+let tutorPubkey: string | null = null;
+
+/** Monotonically increasing chunk counter. */
+let nextChunkId = 0;
+
+// ---------------------------------------------------------------------------
+// DEV-only payment button (Unit 10)
+// ---------------------------------------------------------------------------
+
+if (import.meta.env.DEV) {
+  const payBtn = document.createElement('button');
+  payBtn.id = 'dev-pay-btn';
+  payBtn.textContent = 'Send 1 sat test payment';
+  payBtn.style.cssText =
+    'position:fixed;bottom:1rem;right:1rem;padding:0.5rem 1rem;' +
+    'background:#f7931a;color:#fff;border:none;border-radius:4px;' +
+    'font-size:1rem;cursor:pointer;z-index:9998;';
+
+  payBtn.addEventListener('click', () => {
+    void handleDevPayment();
+  });
+
+  document.body.appendChild(payBtn);
+}
+
+async function handleDevPayment(): Promise<void> {
+  if (tutorPubkey === null) {
+    showError('[DEV] tutorPubkey not yet received from signaling server');
+    return;
+  }
+  if (dataChannel === null || !dataChannel.isOpen) {
+    showError('[DEV] data channel is not open');
+    return;
+  }
+
+  const chunkId = nextChunkId;
+
+  try {
+    // Mint a P2PK-locked token; 2 sat covers the 1 sat value + swap fee
+    const proofs = await mintP2PKToken(2, tutorPubkey);
+
+    const encodedToken = getEncodedToken({
+      mint: mintUrl,
+      proofs,
+      unit: 'sat',
+    });
+
+    dataChannel.sendMessage({ type: 'token_payment', chunkId, encodedToken });
+    nextChunkId += 1;
+    console.log(`[payment] sent chunk #${chunkId}`);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    showError(`[DEV] payment failed: ${message}`);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Signaling client
 // ---------------------------------------------------------------------------
@@ -83,11 +143,11 @@ const client = new SignalingClient(signalingUrl);
 client.onConnect(() => {
   if (sessionId === null) {
     showError('No session ID found in URL. Add ?session=<id> to the URL.');
-    setStatus('error — no session ID');
+    setStatus('error -- no session ID');
     return;
   }
 
-  setStatus('connected — joining session…');
+  setStatus('connected -- joining session\u2026');
   client.send({ type: 'join_session', sessionId });
 
   // Persist session state for reconnect recovery
@@ -118,7 +178,7 @@ client.onReconnected(() => {
   hideReconnectOverlay();
   const saved = loadSession();
   if (saved !== null) {
-    setStatus(`reconnected — session ${saved.sessionId}`);
+    setStatus(`reconnected -- session ${saved.sessionId}`);
     if (sessionDisplayEl !== null) {
       sessionDisplayEl.textContent = `Session: ${saved.sessionId}`;
     }
@@ -170,7 +230,7 @@ peer.onDataChannel = (event) => {
 };
 
 // ---------------------------------------------------------------------------
-// Remote track → remote video
+// Remote track -> remote video
 // ---------------------------------------------------------------------------
 
 peer.onTrack = (event) => {
@@ -186,6 +246,18 @@ peer.onTrack = (event) => {
 
 client.onMessage((msg: SignalingMessage) => {
   switch (msg.type) {
+    case 'session_created':
+      // Viewer receives session_created after joining; extract tutorPubkey.
+      tutorPubkey = msg.tutorPubkey;
+      console.log('[viewer] tutorPubkey received:', tutorPubkey);
+      break;
+
+    case 'viewer_joined':
+      // viewer_joined also carries tutorPubkey (belt-and-suspenders).
+      tutorPubkey = msg.tutorPubkey;
+      console.log('[viewer] tutorPubkey from viewer_joined:', tutorPubkey);
+      break;
+
     case 'offer':
       void handleOffer(msg.sdp as RTCSessionDescriptionInit);
       break;
@@ -195,7 +267,7 @@ client.onMessage((msg: SignalingMessage) => {
       break;
 
     case 'error':
-      showError(`Signaling error: ${msg.code}${msg.message !== undefined ? ' — ' + msg.message : ''}`);
+      showError(`Signaling error: ${msg.code}${msg.message !== undefined ? ' -- ' + msg.message : ''}`);
       break;
 
     default:
@@ -228,21 +300,21 @@ async function handleOffer(offer: RTCSessionDescriptionInit): Promise<void> {
 
   // Wait for local media if not yet available
   if (localStream === null) {
-    setStatus('offer received — waiting for local media…');
+    setStatus('offer received -- waiting for local media\u2026');
     await waitForLocalStream();
   }
 
   if (localStream === null) {
-    showError('Local media stream unavailable — cannot answer offer');
+    showError('Local media stream unavailable -- cannot answer offer');
     return;
   }
 
-  setStatus('offer received — creating answer…');
+  setStatus('offer received -- creating answer\u2026');
 
   try {
     const answer = await peer.handleOffer(offer, localStream);
     client.send({ type: 'answer', sessionId, sdp: answer });
-    setStatus('answer sent — waiting for ICE…');
+    setStatus('answer sent -- waiting for ICE\u2026');
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     showError(`Failed to handle offer: ${message}`);

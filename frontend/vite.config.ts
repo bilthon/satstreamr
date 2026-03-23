@@ -11,7 +11,8 @@ export default defineConfig({
       input: {
         tutor: resolve(__dirname, 'tutor.html'),
         viewer: resolve(__dirname, 'viewer.html'),
-      }
+      },
+      external: ['child_process'],
     }
   },
   test: {
