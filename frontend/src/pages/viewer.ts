@@ -2,6 +2,7 @@ import { SignalingClient } from '../signaling-client.js';
 import { PeerConnection } from '../lib/peer-connection.js';
 import { DataChannel } from '../lib/data-channel.js';
 import type { SignalingMessage } from '../types/signaling.js';
+import { saveSession, loadSession } from '../lib/session-storage.js';
 
 const signalingUrl = (import.meta.env['VITE_SIGNALING_URL'] as string | undefined) ?? 'ws://localhost:8080';
 
@@ -15,6 +16,24 @@ const remoteVideoEl = document.getElementById('remote-video') as HTMLVideoElemen
 const errorEl = document.getElementById('error');
 const sessionDisplayEl = document.getElementById('session-display');
 const dcStatusEl = document.getElementById('dc-status');
+
+// Reconnect overlay — inserted programmatically so it works without HTML changes
+const reconnectOverlayEl = document.createElement('div');
+reconnectOverlayEl.id = 'reconnect-overlay';
+reconnectOverlayEl.style.cssText =
+  'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);' +
+  'color:#fff;font-size:1.5rem;display:flex;align-items:center;' +
+  'justify-content:center;z-index:9999;';
+reconnectOverlayEl.textContent = 'reconnecting\u2026';
+document.body.appendChild(reconnectOverlayEl);
+
+function showReconnectOverlay(): void {
+  reconnectOverlayEl.style.display = 'flex';
+}
+
+function hideReconnectOverlay(): void {
+  reconnectOverlayEl.style.display = 'none';
+}
 
 function setStatus(text: string): void {
   if (statusEl !== null) {
@@ -71,12 +90,41 @@ client.onConnect(() => {
   setStatus('connected — joining session…');
   client.send({ type: 'join_session', sessionId });
 
+  // Persist session state for reconnect recovery
+  client.setSessionId(sessionId);
+  saveSession({
+    sessionId,
+    peerId: '',
+    role: 'viewer',
+    chunkCount: 0,
+    totalSatsPaid: 0,
+    budgetRemaining: 0,
+  });
+
   // Start media in parallel with session join
   void startMedia();
 });
 
+client.onDisconnecting(() => {
+  showReconnectOverlay();
+  setStatus('reconnecting\u2026');
+});
+
 client.onDisconnect(() => {
   setStatus('disconnected');
+});
+
+client.onReconnected(() => {
+  hideReconnectOverlay();
+  const saved = loadSession();
+  if (saved !== null) {
+    setStatus(`reconnected — session ${saved.sessionId}`);
+    if (sessionDisplayEl !== null) {
+      sessionDisplayEl.textContent = `Session: ${saved.sessionId}`;
+    }
+  } else {
+    setStatus('reconnected');
+  }
 });
 
 // ---------------------------------------------------------------------------

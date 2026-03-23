@@ -18,9 +18,9 @@ Last updated: 2026-03-22 (Gate 2 passed)
 | 04 | Signaling Server Core | ✅ | WebSocket server (ws); 10 tests passing; port 8080 |
 | 05 | Frontend Scaffold | ✅ | Vite + TS multi-page; SignalingClient; zero build errors |
 | 06 | WebRTC Peer Connection | ✅ | Gate 2 — PASSED 2026-03-22; ICE connected in two browser tabs |
-| 07 | Data Channel Setup | 🔄 | In progress |
+| 07 | Data Channel Setup | ✅ | DataChannel wrapper; ordered; devSend helper; merged |
 | 08 | Cashu Wallet Module (browser) | ✅ | 4 integration tests passing; merged |
-| 09 | WebSocket Reconnect & Session Persistence | ⬜ | |
+| 09 | WebSocket Reconnect & Session Persistence | 🔄 | PR open: exponential backoff, session_rejoined, sessionStorage |
 | 10 | Token Transfer over Data Channel | ⬜ | Gate 3 |
 | 11 | Payment Scheduler | ⬜ | Gate 4 |
 | 12 | Session UI | ⬜ | |
