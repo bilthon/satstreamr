@@ -1,0 +1,13 @@
+{
+  "name": "satstreamr-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test-p2pk": "npx tsx test-p2pk.ts"
+  },
+  "dependencies": {
+    "@cashu/cashu-ts": "^2.0.0",
+    "tsx": "^4.0.0"
+  }
+}

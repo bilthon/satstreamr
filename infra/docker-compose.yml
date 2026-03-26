@@ -1,0 +1,81 @@
+# docker-compose.yml — Bitcoin/LND regtest network (headless, ARM64)
+# Images: lncm/bitcoind:v27.0 and lightninglabs/lnd:v0.18.5-beta (both have native arm64 builds)
+
+services:
+  bitcoind:
+    image: lncm/bitcoind:v27.0
+    container_name: bitcoind
+    restart: unless-stopped
+    # lncm/bitcoind entrypoint is `bitcoind`; pass flags as command args
+    command:
+      - -regtest
+      - -server
+      - -rpcuser=regtest
+      - -rpcpassword=regtest
+      - -rpcallowip=0.0.0.0/0
+      - -rpcbind=0.0.0.0
+      - -zmqpubrawblock=tcp://0.0.0.0:28332
+      - -zmqpubrawtx=tcp://0.0.0.0:28333
+      - -fallbackfee=0.0002
+    ports:
+      - "18443:18443"   # regtest RPC
+      - "28332:28332"   # ZMQ rawblock
+      - "28333:28333"   # ZMQ rawtx
+    volumes:
+      - bitcoind_data:/data/.bitcoin
+
+  lnd_mint:
+    image: lightninglabs/lnd:v0.18.5-beta
+    container_name: lnd_mint
+    restart: unless-stopped
+    # lightninglabs/lnd entrypoint is `lnd`; pass flags as command args
+    command:
+      - --bitcoin.active
+      - --bitcoin.regtest
+      - --bitcoin.node=bitcoind
+      - --bitcoind.rpchost=bitcoind
+      - --bitcoind.rpcuser=regtest
+      - --bitcoind.rpcpass=regtest
+      - --bitcoind.zmqpubrawblock=tcp://bitcoind:28332
+      - --bitcoind.zmqpubrawtx=tcp://bitcoind:28333
+      - --noseedbackup
+      - --rpclisten=0.0.0.0:10009
+      - --restlisten=0.0.0.0:8080
+      - --tlsextraip=127.0.0.1
+      - --tlsextradomain=lnd_mint
+    ports:
+      - "10009:10009"   # gRPC
+      - "8081:8080"     # REST (host 8081 → container 8080)
+    volumes:
+      - lnd_mint_data:/root/.lnd
+    depends_on:
+      - bitcoind
+
+  lnd_customer:
+    image: lightninglabs/lnd:v0.18.5-beta
+    container_name: lnd_customer
+    restart: unless-stopped
+    command:
+      - --bitcoin.active
+      - --bitcoin.regtest
+      - --bitcoin.node=bitcoind
+      - --bitcoind.rpchost=bitcoind
+      - --bitcoind.rpcuser=regtest
+      - --bitcoind.rpcpass=regtest
+      - --bitcoind.zmqpubrawblock=tcp://bitcoind:28332
+      - --bitcoind.zmqpubrawtx=tcp://bitcoind:28333
+      - --noseedbackup
+      - --rpclisten=0.0.0.0:10009
+      - --restlisten=0.0.0.0:8080
+    ports:
+      - "10010:10009"   # gRPC (host 10010 → container 10009)
+      - "8082:8080"     # REST  (host 8082 → container 8080)
+    volumes:
+      - lnd_customer_data:/root/.lnd
+    depends_on:
+      - bitcoind
+
+volumes:
+  bitcoind_data:
+  lnd_mint_data:
+  lnd_customer_data:
