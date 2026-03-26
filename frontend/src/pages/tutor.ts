@@ -104,8 +104,18 @@ let lastSeenChunkId = -1;
 const client = new SignalingClient(signalingUrl);
 
 client.onConnect(() => {
-  setStatus('connected -- creating session\u2026');
-  client.send({ type: 'create_session', tutorPubkey: tutorPubkeyHex });
+  const existing = loadSession();
+  if (existing !== null) {
+    // A session was previously established (e.g. SignalingClient lost its
+    // in-memory sessionId but sessionStorage still has it).  Rejoin rather
+    // than creating a new orphan session.
+    client.setSessionId(existing.sessionId);
+    setStatus('reconnecting -- rejoining session\u2026');
+    client.send({ type: 'rejoin_session', sessionId: existing.sessionId });
+  } else {
+    setStatus('connected -- creating session\u2026');
+    client.send({ type: 'create_session', tutorPubkey: tutorPubkeyHex });
+  }
 });
 
 client.onDisconnecting(() => {
