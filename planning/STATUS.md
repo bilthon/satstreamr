@@ -1,6 +1,6 @@
 # Satstreamr MVP — Progress Tracker
 
-Last updated: 2026-03-23 (Units 09+10 merged; signaling protocol fix + browser compat fix merged)
+Last updated: 2026-03-26
 
 ## Legend
 - ✅ Complete
@@ -21,8 +21,8 @@ Last updated: 2026-03-23 (Units 09+10 merged; signaling protocol fix + browser c
 | 07 | Data Channel Setup | ✅ | DataChannel wrapper; ordered; devSend helper; merged |
 | 08 | Cashu Wallet Module (browser) | ✅ | 4 integration tests passing; merged |
 | 09 | WebSocket Reconnect & Session Persistence | ✅ | Merged; exponential backoff, session_rejoined ack, sessionStorage |
-| 10 | Token Transfer over Data Channel | 🔄 | Code merged; Gate 3 browser verification pending |
-| 11 | Payment Scheduler | ⬜ | Gate 4 |
+| 10 | Token Transfer over Data Channel | ✅ | Gate 3 — PASSED 2026-03-26; P2PK token delivered over data channel |
+| 11 | Payment Scheduler | ⬜ | Gate 4; next unit |
 | 12 | Session UI | ⬜ | |
 | 13 | Coturn + ICE Restart | ⬜ | |
 | 14 | Screen Sharing | ⬜ | |
@@ -40,7 +40,7 @@ Last updated: 2026-03-23 (Units 09+10 merged; signaling protocol fix + browser c
 |------|------|-----------|--------|
 | 1 | 03 | NUT-11 P2PK round-trip passes on live mint | ✅ |
 | 2 | 06 | WebRTC peer connection established between two browser tabs | ✅ |
-| 3 | 10 | Cashu token delivered over data channel, verified by recipient | 🔄 |
+| 3 | 10 | Cashu token delivered over data channel, verified by recipient | ✅ |
 | 4 | 11 | Payment scheduler runs for 60s without missed chunks | ⬜ |
 
 ## Repos
