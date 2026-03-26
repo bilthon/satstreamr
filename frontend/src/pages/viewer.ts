@@ -3,8 +3,9 @@ import { SignalingClient } from '../signaling-client.js';
 import { PeerConnection } from '../lib/peer-connection.js';
 import { DataChannel } from '../lib/data-channel.js';
 import { mintP2PKToken } from '../lib/cashu-wallet.js';
+import { PaymentScheduler } from '../lib/payment-scheduler.js';
 import type { SignalingMessage } from '../types/signaling.js';
-import { saveSession, loadSession } from '../lib/session-storage.js';
+import { saveSession, loadSession, updateSession } from '../lib/session-storage.js';
 
 const signalingUrl = (import.meta.env['VITE_SIGNALING_URL'] as string | undefined) ?? 'ws://localhost:8080';
 const mintUrl = (import.meta.env['VITE_MINT_URL'] as string | undefined) ?? '';
@@ -76,12 +77,13 @@ if (sessionDisplayEl !== null) {
 
 let localStream: MediaStream | null = null;
 let dataChannel: DataChannel | null = null;
+let scheduler: PaymentScheduler | null = null;
 const peer = new PeerConnection();
 
 /** Tutor's compressed secp256k1 pubkey received via signaling. */
 let tutorPubkey: string | null = null;
 
-/** Monotonically increasing chunk counter. */
+/** Monotonically increasing chunk counter (used only by DEV manual payment). */
 let nextChunkId = 0;
 
 // ---------------------------------------------------------------------------
@@ -154,13 +156,16 @@ client.onConnect(() => {
 
   // Persist session state for reconnect recovery
   client.setSessionId(sessionId);
+
+  // Load existing session or create a fresh one.
+  const existing = loadSession();
   saveSession({
     sessionId,
-    peerId: '',
+    peerId: existing?.peerId ?? '',
     role: 'viewer',
-    chunkCount: 0,
-    totalSatsPaid: 0,
-    budgetRemaining: 0,
+    chunkCount: existing?.chunkCount ?? 0,
+    totalSatsPaid: existing?.totalSatsPaid ?? 0,
+    budgetRemaining: existing?.budgetRemaining ?? 100,
   });
 
   // Start media in parallel with session join
@@ -170,10 +175,13 @@ client.onConnect(() => {
 client.onDisconnecting(() => {
   showReconnectOverlay();
   setStatus('reconnecting\u2026');
+  // Pause the scheduler while the signaling connection is down.
+  scheduler?.stop();
 });
 
 client.onDisconnect(() => {
   setStatus('disconnected');
+  scheduler?.stop();
 });
 
 client.onReconnected(() => {
@@ -220,14 +228,66 @@ peer.onDataChannel = (event) => {
     console.log('[datachannel] open');
     setDcStatus('open');
 
-    dataChannel.onMessage((msg) => {
-      console.log('[viewer] data channel message received:', msg);
+    if (tutorPubkey === null) {
+      showError('[scheduler] tutorPubkey not available — cannot start payment scheduler');
+      return;
+    }
+
+    // Load persisted state so the scheduler survives page reloads.
+    const session = loadSession();
+    const initialChunkId = session?.chunkCount ?? 0;
+    const initialTotalSatsPaid = session?.totalSatsPaid ?? 0;
+    const budgetSats = session?.budgetRemaining ?? 100;
+
+    // Sync nextChunkId for the DEV manual payment button.
+    nextChunkId = initialChunkId;
+
+    scheduler = new PaymentScheduler(
+      dataChannel,
+      mintP2PKToken,
+      (proofs, url) =>
+        getEncodedToken({ mint: url, proofs, unit: 'sat' }),
+      {
+        intervalSecs: 10,
+        chunkSats: 2,
+        budgetSats,
+        tutorPubkey,
+        mintUrl,
+        initialChunkId,
+        initialTotalSatsPaid,
+        onStateChange: (state) => {
+          updateSession({
+            chunkCount: state.chunkId,
+            totalSatsPaid: state.totalSatsPaid,
+            budgetRemaining: state.budgetRemaining,
+          });
+        },
+      },
+    );
+
+    scheduler.onBudgetExhausted(() => {
+      showError('Budget exhausted \u2014 session ended');
+      client.disconnect();
     });
+
+    scheduler.onPaymentFailure((reason) => {
+      showError(`Payment failed \u2014 session paused: ${reason}`);
+    });
+
+    scheduler.onChunkPaid((chunkId, totalPaid, budgetRemaining) => {
+      console.log(
+        `[scheduler] chunk #${chunkId} paid — total: ${totalPaid} sats, remaining: ${budgetRemaining} sats`,
+      );
+    });
+
+    scheduler.start();
   };
 
   rawChannel.onclose = () => {
     console.log('[datachannel] closed');
     setDcStatus('closed');
+    scheduler?.stop();
+    scheduler = null;
   };
 };
 
