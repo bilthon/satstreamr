@@ -24,9 +24,10 @@ const dcStatusEl = document.getElementById('dc-status');
 const reconnectOverlayEl = document.createElement('div');
 reconnectOverlayEl.id = 'reconnect-overlay';
 reconnectOverlayEl.style.cssText =
-  'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);' +
-  'color:#fff;font-size:1.5rem;display:flex;align-items:center;' +
+  'position:fixed;inset:0;background:rgba(0,0,0,0.6);' +
+  'color:#fff;font-size:1.5rem;align-items:center;' +
   'justify-content:center;z-index:9999;';
+reconnectOverlayEl.style.display = 'none';
 reconnectOverlayEl.textContent = 'reconnecting\u2026';
 document.body.appendChild(reconnectOverlayEl);
 
@@ -141,6 +142,7 @@ async function handleDevPayment(): Promise<void> {
 const client = new SignalingClient(signalingUrl);
 
 client.onConnect(() => {
+  hideReconnectOverlay();
   if (sessionId === null) {
     showError('No session ID found in URL. Add ?session=<id> to the URL.');
     setStatus('error -- no session ID');
