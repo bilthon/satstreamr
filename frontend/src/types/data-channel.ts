@@ -22,7 +22,13 @@ export type PaymentNackMessage = {
   reason: string;
 };
 
+export type SessionPausedMessage = {
+  type: 'session_paused';
+  reason: string;
+};
+
 export type DataChannelMessage =
   | TokenPaymentMessage
   | PaymentAckMessage
-  | PaymentNackMessage;
+  | PaymentNackMessage
+  | SessionPausedMessage;
