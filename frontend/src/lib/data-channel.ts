@@ -10,7 +10,7 @@
 
 import type { DataChannelMessage } from '../types/data-channel.js';
 
-const KNOWN_TYPES = new Set<string>(['token_payment', 'payment_ack', 'payment_nack']);
+const KNOWN_TYPES = new Set<string>(['token_payment', 'payment_ack', 'payment_nack', 'session_paused']);
 
 export class DataChannel {
   private readonly channel: RTCDataChannel;
