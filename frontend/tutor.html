@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Satstreamr — Tutor</title>
+    <link rel="stylesheet" href="/src/styles/session.css" />
     <style>
       body { font-family: sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
       video { background: #000; border-radius: 4px; }
@@ -28,7 +29,42 @@
       </p>
     </div>
 
+    <!-- Session stats bar -->
+    <div id="session-stats" style="display:none">
+      <div>
+        <span class="stat-label">Session time</span>
+        <span class="stat-value" id="elapsed-time">00:00</span>
+      </div>
+      <div>
+        <span class="stat-label">Sats received</span>
+        <span class="stat-value" id="sats-received">0</span>
+      </div>
+    </div>
+
+    <!-- Payment paused banner -->
+    <div id="payment-paused-banner">Payment paused — waiting for viewer</div>
+
     <div id="error"></div>
+
+    <!-- Session-end summary overlay -->
+    <div id="session-summary-overlay" role="dialog" aria-modal="true" aria-labelledby="summary-title">
+      <div id="session-summary-card">
+        <h2 id="summary-title">Session ended</h2>
+        <div class="summary-row">
+          <span class="label">Duration</span>
+          <span class="value" id="summary-duration">—</span>
+        </div>
+        <div class="summary-row">
+          <span class="label">Total sats exchanged</span>
+          <span class="value" id="summary-sats">—</span>
+        </div>
+        <div class="summary-row">
+          <span class="label">Chunks paid</span>
+          <span class="value" id="summary-chunks">—</span>
+        </div>
+        <button id="summary-close-btn" type="button">Close</button>
+      </div>
+    </div>
 
     <div class="video-row">
       <div class="video-wrap">
