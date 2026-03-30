@@ -5,7 +5,7 @@ import { DataChannel } from '../lib/data-channel.js';
 import { mintP2PKToken } from '../lib/cashu-wallet.js';
 import { PaymentScheduler } from '../lib/payment-scheduler.js';
 import type { SignalingMessage } from '../types/signaling.js';
-import { saveSession, loadSession, updateSession } from '../lib/session-storage.js';
+import { saveSession, loadSession, updateSession, clearSession } from '../lib/session-storage.js';
 
 const signalingUrl = (import.meta.env['VITE_SIGNALING_URL'] as string | undefined) ?? 'ws://localhost:8080';
 const mintUrl = (import.meta.env['VITE_MINT_URL'] as string | undefined) ?? '';
@@ -20,6 +20,17 @@ const remoteVideoEl = document.getElementById('remote-video') as HTMLVideoElemen
 const errorEl = document.getElementById('error');
 const sessionDisplayEl = document.getElementById('session-display');
 const dcStatusEl = document.getElementById('dc-status');
+
+// Session UI elements
+const sessionStatsEl = document.getElementById('session-stats');
+const budgetDisplayEl = document.getElementById('budget-display');
+const chunkIndicatorEl = document.getElementById('chunk-indicator');
+const paymentPausedBannerEl = document.getElementById('payment-paused-banner');
+const sessionSummaryOverlayEl = document.getElementById('session-summary-overlay');
+const summaryDurationEl = document.getElementById('summary-duration');
+const summarySatsEl = document.getElementById('summary-sats');
+const summaryChunksEl = document.getElementById('summary-chunks');
+const summaryCloseBtnEl = document.getElementById('summary-close-btn');
 
 // Reconnect overlay -- inserted programmatically so it works without HTML changes
 const reconnectOverlayEl = document.createElement('div');
@@ -58,6 +69,107 @@ function setDcStatus(text: string): void {
   if (dcStatusEl !== null) {
     dcStatusEl.textContent = `payment channel: ${text}`;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Session UI state
+// ---------------------------------------------------------------------------
+
+let sessionStartTime: number | null = null;
+let totalSatsPaidDisplay = 0;
+let totalChunksPaidDisplay = 0;
+let summaryShown = false;
+
+/** Format seconds as MM:SS. */
+function formatElapsed(totalSeconds: number): string {
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
+/** Return elapsed seconds since session start (0 if not started). */
+function getElapsedSeconds(): number {
+  if (sessionStartTime === null) return 0;
+  return Math.floor((Date.now() - sessionStartTime) / 1000);
+}
+
+/** Show the session stats bar and record start time. */
+function showSessionStats(initialBudget: number): void {
+  if (sessionStartTime === null) {
+    sessionStartTime = Date.now();
+  }
+  if (sessionStatsEl !== null) {
+    sessionStatsEl.style.display = 'flex';
+  }
+  updateBudgetDisplay(initialBudget);
+}
+
+/** Update the remaining budget display. */
+function updateBudgetDisplay(budgetSats: number): void {
+  if (budgetDisplayEl !== null) {
+    budgetDisplayEl.textContent = `${budgetSats} sats`;
+    if (budgetSats <= 10) {
+      budgetDisplayEl.classList.add('low');
+    } else {
+      budgetDisplayEl.classList.remove('low');
+    }
+  }
+}
+
+/** Trigger the chunk pulse animation on the indicator dot. */
+function triggerChunkPulse(): void {
+  if (chunkIndicatorEl === null) return;
+  // Remove the class first to reset animation if it's already running
+  chunkIndicatorEl.classList.remove('pulse');
+  // Force a reflow so removing and re-adding the class restarts the animation
+  void chunkIndicatorEl.offsetWidth;
+  chunkIndicatorEl.classList.add('pulse');
+  setTimeout(() => {
+    chunkIndicatorEl.classList.remove('pulse');
+  }, 500);
+}
+
+/** Show the payment-paused banner. */
+function showPaymentPausedBanner(): void {
+  if (paymentPausedBannerEl !== null) {
+    paymentPausedBannerEl.classList.add('visible');
+  }
+}
+
+/** Hide the payment-paused banner. */
+function hidePaymentPausedBanner(): void {
+  if (paymentPausedBannerEl !== null) {
+    paymentPausedBannerEl.classList.remove('visible');
+  }
+}
+
+/** Show the session-end summary overlay. */
+function showSessionSummary(): void {
+  if (summaryShown) return;
+  summaryShown = true;
+
+  const elapsed = getElapsedSeconds();
+
+  if (summaryDurationEl !== null) {
+    summaryDurationEl.textContent = formatElapsed(elapsed);
+  }
+  if (summarySatsEl !== null) {
+    summarySatsEl.textContent = String(totalSatsPaidDisplay);
+  }
+  if (summaryChunksEl !== null) {
+    summaryChunksEl.textContent = String(totalChunksPaidDisplay);
+  }
+  if (sessionSummaryOverlayEl !== null) {
+    sessionSummaryOverlayEl.classList.add('visible');
+  }
+}
+
+// Wire up the close button
+if (summaryCloseBtnEl !== null) {
+  summaryCloseBtnEl.addEventListener('click', () => {
+    clearSession();
+    window.location.href = '/';
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -242,6 +354,12 @@ peer.onDataChannel = (event) => {
     // Sync nextChunkId for the DEV manual payment button.
     nextChunkId = initialChunkId;
 
+    // Show the session stats bar with the current budget
+    totalSatsPaidDisplay = initialTotalSatsPaid;
+    totalChunksPaidDisplay = initialChunkId;
+    showSessionStats(budgetSats);
+    hidePaymentPausedBanner();
+
     scheduler = new PaymentScheduler(
       dataChannel,
       mintP2PKToken,
@@ -267,17 +385,24 @@ peer.onDataChannel = (event) => {
 
     scheduler.onBudgetExhausted(() => {
       showError('Budget exhausted \u2014 session ended');
+      showSessionSummary();
       client.disconnect();
     });
 
     scheduler.onPaymentFailure((reason) => {
       showError(`Payment failed \u2014 session paused: ${reason}`);
+      showPaymentPausedBanner();
     });
 
     scheduler.onChunkPaid((chunkId, totalPaid, budgetRemaining) => {
       console.log(
         `[scheduler] chunk #${chunkId} paid — total: ${totalPaid} sats, remaining: ${budgetRemaining} sats`,
       );
+      totalSatsPaidDisplay = totalPaid;
+      totalChunksPaidDisplay = chunkId + 1;
+      updateBudgetDisplay(budgetRemaining);
+      triggerChunkPulse();
+      hidePaymentPausedBanner();
     });
 
     scheduler.start();
@@ -330,6 +455,10 @@ client.onMessage((msg: SignalingMessage) => {
 
     case 'error':
       showError(`Signaling error: ${msg.code}${msg.message !== undefined ? ' -- ' + msg.message : ''}`);
+      break;
+
+    case 'end_session':
+      showSessionSummary();
       break;
 
     default:

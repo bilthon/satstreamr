@@ -1,0 +1,173 @@
+/* ============================================================
+   session.css — Session UI styles for satstreamr
+   Covers:
+     - Pulse animation for chunk payment indicator
+     - Session-end summary overlay
+     - Payment paused banner
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   Pulse animation
+   ------------------------------------------------------------ */
+
+@keyframes chunk-pulse {
+  0%   { opacity: 1; transform: scale(1.4); background-color: #22c55e; }
+  100% { opacity: 0; transform: scale(1); background-color: #86efac; }
+}
+
+#chunk-indicator {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #86efac;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+  opacity: 0.4;
+  transition: opacity 0.1s ease;
+}
+
+#chunk-indicator.pulse {
+  animation: chunk-pulse 500ms ease-out forwards;
+}
+
+/* ------------------------------------------------------------
+   Session stats bar (tutor + viewer)
+   ------------------------------------------------------------ */
+
+#session-stats {
+  display: flex;
+  gap: 2rem;
+  align-items: center;
+  margin: 0.75rem 0;
+  padding: 0.6rem 1rem;
+  background: #f0f4ff;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  flex-wrap: wrap;
+}
+
+#session-stats .stat-label {
+  font-size: 0.8rem;
+  color: #555;
+  display: block;
+  margin-bottom: 0.1rem;
+}
+
+#session-stats .stat-value {
+  font-size: 1.25rem;
+  font-weight: bold;
+  font-family: monospace;
+  color: #1a1a2e;
+}
+
+/* Larger display for remaining budget on viewer side */
+#budget-display {
+  font-size: 2.5rem;
+  font-weight: bold;
+  font-family: monospace;
+  color: #1a1a2e;
+  line-height: 1;
+}
+
+#budget-display.low {
+  color: #dc2626;
+}
+
+/* ------------------------------------------------------------
+   Payment paused banner
+   ------------------------------------------------------------ */
+
+#payment-paused-banner {
+  display: none;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.75rem 1rem;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 4px;
+  color: #92400e;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-align: center;
+  margin: 0.5rem 0;
+}
+
+#payment-paused-banner.visible {
+  display: block;
+}
+
+/* ------------------------------------------------------------
+   Session-end summary overlay
+   ------------------------------------------------------------ */
+
+#session-summary-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.75);
+  align-items: center;
+  justify-content: center;
+}
+
+#session-summary-overlay.visible {
+  display: flex;
+}
+
+#session-summary-card {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 2rem 2.5rem;
+  max-width: 420px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  text-align: center;
+}
+
+#session-summary-card h2 {
+  margin: 0 0 1.25rem;
+  font-size: 1.5rem;
+  color: #1a1a2e;
+}
+
+#session-summary-card .summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 1rem;
+}
+
+#session-summary-card .summary-row:last-of-type {
+  border-bottom: none;
+}
+
+#session-summary-card .summary-row .label {
+  color: #555;
+}
+
+#session-summary-card .summary-row .value {
+  font-weight: bold;
+  font-family: monospace;
+  color: #1a1a2e;
+  font-size: 1.05rem;
+}
+
+#session-summary-card #summary-close-btn {
+  margin-top: 1.5rem;
+  padding: 0.6rem 1.75rem;
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.15s ease;
+}
+
+#session-summary-card #summary-close-btn:hover {
+  background: #2563eb;
+}
