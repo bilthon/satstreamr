@@ -1,6 +1,6 @@
 # Satstreamr MVP — Progress Tracker
 
-Last updated: 2026-04-04
+Last updated: 2026-04-04 (Unit 13 complete)
 
 ## Legend
 - ✅ Complete
@@ -24,7 +24,7 @@ Last updated: 2026-04-04
 | 10 | Token Transfer over Data Channel | ✅ | Gate 3 — PASSED 2026-03-26; P2PK token delivered over data channel |
 | 11 | Payment Scheduler | ✅ | Gate 4 — PASSED 2026-03-29; ~10s interval, self-scheduling setTimeout |
 | 12 | Session UI | ✅ | Elapsed timer, budget display, pulse animation, session-end summary overlay |
-| 13 | Coturn + ICE Restart | ⬜ | MVP |
+| 13 | Coturn + ICE Restart | ✅ | HMAC TURN credentials, ICE restart state machine, 15s countdown UI |
 | 14 | ~~Screen Sharing~~ | ❌ | Dropped — post-MVP |
 | 15 | ~~Browser Detection~~ | ❌ | Dropped — post-MVP |
 | 16 | Cash-out via Lightning Invoice | ⬜ | MVP |
