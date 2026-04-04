@@ -9,6 +9,7 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
+        index: resolve(__dirname, 'index.html'),
         tutor: resolve(__dirname, 'tutor.html'),
         viewer: resolve(__dirname, 'viewer.html'),
       },

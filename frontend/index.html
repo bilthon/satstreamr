@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Satstreamr</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+
+      body {
+        font-family: sans-serif;
+        max-width: 560px;
+        margin: 3rem auto;
+        padding: 0 1.5rem;
+        color: #1a1a2e;
+        background: #fff;
+      }
+
+      h1 {
+        font-size: 1.75rem;
+        margin: 0 0 0.25rem;
+      }
+
+      .tagline {
+        color: #555;
+        font-size: 0.95rem;
+        margin: 0 0 2rem;
+      }
+
+      /* ---- Wallet widget ---- */
+      #wallet-widget {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+        background: #f0f4ff;
+        border-radius: 6px;
+        padding: 0.85rem 1.1rem;
+        margin-bottom: 2rem;
+      }
+
+      #balance-display {
+        font-size: 1.1rem;
+        font-weight: bold;
+        font-family: monospace;
+        flex: 1;
+      }
+
+      .wallet-btn {
+        padding: 0.4rem 0.9rem;
+        border: 1px solid #3b82f6;
+        border-radius: 4px;
+        background: #fff;
+        color: #3b82f6;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
+      }
+
+      .wallet-btn:hover {
+        background: #3b82f6;
+        color: #fff;
+      }
+
+      /* ---- Section cards ---- */
+      .section-card {
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 1.25rem;
+      }
+
+      .section-card h2 {
+        font-size: 1.1rem;
+        margin: 0 0 0.75rem;
+        color: #1a1a2e;
+      }
+
+      .section-card p {
+        font-size: 0.9rem;
+        color: #555;
+        margin: 0 0 1rem;
+      }
+
+      /* ---- Buttons ---- */
+      .btn-primary {
+        display: inline-block;
+        padding: 0.55rem 1.4rem;
+        background: #3b82f6;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s ease;
+      }
+
+      .btn-primary:hover {
+        background: #2563eb;
+      }
+
+      .btn-primary:disabled {
+        background: #9ca3af;
+        cursor: not-allowed;
+      }
+
+      /* ---- Join form ---- */
+      #join-form {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+
+      #session-id-input {
+        flex: 1;
+        min-width: 0;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        font-size: 0.95rem;
+        font-family: monospace;
+        color: #1a1a2e;
+      }
+
+      #session-id-input:focus {
+        outline: 2px solid #3b82f6;
+        outline-offset: 1px;
+      }
+
+      #join-error {
+        display: none;
+        margin-top: 0.5rem;
+        font-size: 0.85rem;
+        color: #dc2626;
+      }
+
+      /* ---- Invite preview panel ---- */
+      #invite-panel {
+        display: none;
+        border: 1px solid #f59e0b;
+        border-radius: 6px;
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 1.25rem;
+        background: #fffbeb;
+      }
+
+      #invite-panel h2 {
+        font-size: 1.1rem;
+        margin: 0 0 0.75rem;
+        color: #92400e;
+      }
+
+      #invite-panel p {
+        font-size: 0.85rem;
+        color: #78350f;
+        margin: 0 0 0.75rem;
+      }
+
+      #invite-json {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 4px;
+        padding: 0.75rem;
+        font-family: monospace;
+        font-size: 0.8rem;
+        color: #1a1a2e;
+        word-break: break-all;
+        white-space: pre-wrap;
+        margin: 0 0 1rem;
+      }
+
+      #invite-decode-error {
+        display: none;
+        font-size: 0.85rem;
+        color: #dc2626;
+        margin-bottom: 0.75rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Satstreamr</h1>
+    <p class="tagline">Pay-per-minute video streaming over Lightning</p>
+
+    <!-- Wallet widget -->
+    <div id="wallet-widget">
+      <span id="balance-display">Balance: — sats</span>
+      <button class="wallet-btn" id="deposit-btn" type="button">Deposit</button>
+      <button class="wallet-btn" id="withdraw-btn" type="button">Withdraw</button>
+    </div>
+
+    <!-- Session invite preview (shown when ?join= param is present) -->
+    <div id="invite-panel">
+      <h2>Session Invite</h2>
+      <p>You received an invite link. Decoded content:</p>
+      <div id="invite-decode-error"></div>
+      <pre id="invite-json"></pre>
+      <button class="btn-primary" id="invite-join-btn" type="button">Join This Session</button>
+    </div>
+
+    <!-- Start streaming (tutor) -->
+    <div class="section-card">
+      <h2>Start Streaming</h2>
+      <p>Share your screen or camera and receive sats per minute from viewers.</p>
+      <button class="btn-primary" id="start-streaming-btn" type="button">Start Streaming</button>
+    </div>
+
+    <!-- Join a stream (viewer) -->
+    <div class="section-card">
+      <h2>Join a Stream</h2>
+      <p>Enter the session ID shared by the streamer to join and watch.</p>
+      <div id="join-form">
+        <input
+          type="text"
+          id="session-id-input"
+          placeholder="Session ID"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button class="btn-primary" id="join-btn" type="button">Join</button>
+      </div>
+      <div id="join-error">Please enter a session ID.</div>
+    </div>
+
+    <script type="module" src="/src/pages/home.ts"></script>
+  </body>
+</html>
