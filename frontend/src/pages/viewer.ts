@@ -26,6 +26,7 @@ const dcStatusEl = document.getElementById('dc-status');
 // Session UI elements
 const sessionStatsEl = document.getElementById('session-stats');
 const budgetDisplayEl = document.getElementById('budget-display');
+const estDurationDisplayEl = document.getElementById('est-duration-display');
 const chunkIndicatorEl = document.getElementById('chunk-indicator');
 const paymentPausedBannerEl = document.getElementById('payment-paused-banner');
 const sessionSummaryOverlayEl = document.getElementById('session-summary-overlay');
@@ -129,6 +130,18 @@ function updateBudgetDisplay(budgetSats: number): void {
       budgetDisplayEl.classList.remove('low');
     }
   }
+  updateEstDurationDisplay(budgetSats);
+}
+
+/** Update the estimated session duration based on current balance and rate. */
+function updateEstDurationDisplay(budgetSats: number): void {
+  if (estDurationDisplayEl === null) return;
+  if (activeRateSatsPerInterval <= 0 || activeIntervalSeconds <= 0) {
+    estDurationDisplayEl.textContent = '—';
+    return;
+  }
+  const mins = Math.floor(budgetSats / activeRateSatsPerInterval * activeIntervalSeconds / 60);
+  estDurationDisplayEl.textContent = `~${mins} min at current rate`;
 }
 
 /** Trigger the chunk pulse animation on the indicator dot. */
@@ -196,6 +209,32 @@ const sessionId = urlParams.get('session');
 
 if (sessionDisplayEl !== null) {
   sessionDisplayEl.textContent = sessionId !== null ? `Session: ${sessionId}` : 'No session ID in URL';
+}
+
+// ---------------------------------------------------------------------------
+// Rate state (populated from signaling; invite is a fallback)
+// ---------------------------------------------------------------------------
+
+const DEFAULT_RATE_SATS = 2;
+const DEFAULT_INTERVAL_SECS = 10;
+
+let activeRateSatsPerInterval = DEFAULT_RATE_SATS;
+let activeIntervalSeconds = DEFAULT_INTERVAL_SECS;
+
+// Pre-populate from pending_join invite data if available (set by home.ts)
+try {
+  const pendingJoinRaw = sessionStorage.getItem('pending_join');
+  if (pendingJoinRaw !== null) {
+    const pendingJoin = JSON.parse(pendingJoinRaw) as Record<string, unknown>;
+    if (typeof pendingJoin['rateSatsPerInterval'] === 'number') {
+      activeRateSatsPerInterval = pendingJoin['rateSatsPerInterval'] as number;
+    }
+    if (typeof pendingJoin['intervalSeconds'] === 'number') {
+      activeIntervalSeconds = pendingJoin['intervalSeconds'] as number;
+    }
+  }
+} catch {
+  // sessionStorage read/parse failures are non-fatal
 }
 
 // ---------------------------------------------------------------------------
@@ -388,8 +427,8 @@ peer.onDataChannel = (event) => {
       (proofs, url) =>
         getEncodedToken({ mint: url, proofs, unit: 'sat' }),
       {
-        intervalSecs: 10,
-        chunkSats: 2,
+        intervalSecs: activeIntervalSeconds,
+        chunkSats: activeRateSatsPerInterval,
         budgetSats,
         tutorPubkey,
         mintUrl,
@@ -469,6 +508,14 @@ client.onMessage((msg: SignalingMessage) => {
       }
       tutorPubkey = msg.tutorPubkey;
       console.log('[viewer] tutorPubkey received:', tutorPubkey);
+      // Signaling message is authoritative — override invite-derived rate if present
+      if (typeof msg.rateSatsPerInterval === 'number') {
+        activeRateSatsPerInterval = msg.rateSatsPerInterval;
+      }
+      if (typeof msg.intervalSeconds === 'number') {
+        activeIntervalSeconds = msg.intervalSeconds;
+      }
+      console.log('[viewer] rate config:', activeRateSatsPerInterval, 'sats /', activeIntervalSeconds, 's');
       break;
 
     case 'viewer_joined':

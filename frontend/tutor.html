@@ -21,6 +21,25 @@
     <p>Status: <span id="status">connecting...</span></p>
     <p><span id="dc-status">payment channel: —</span></p>
 
+    <!-- Pre-session rate configuration (hidden after session creation) -->
+    <div id="rate-config" style="margin:1rem 0;padding:1rem 1.25rem;background:#f9fafb;border:1px solid #d1d5db;border-radius:6px;">
+      <h2 style="font-size:1rem;margin:0 0 0.75rem;color:#111827;">Session Rate</h2>
+      <div style="display:flex;gap:1.5rem;flex-wrap:wrap;align-items:flex-end;">
+        <label style="display:flex;flex-direction:column;gap:0.25rem;font-size:0.875rem;color:#374151;">
+          Sats per payment
+          <input type="number" id="rate-sats-input" value="2" min="1" style="width:6rem;padding:0.35rem 0.5rem;border:1px solid #d1d5db;border-radius:4px;font-size:1rem;" />
+        </label>
+        <label style="display:flex;flex-direction:column;gap:0.25rem;font-size:0.875rem;color:#374151;">
+          Interval (seconds)
+          <input type="number" id="rate-interval-input" value="10" min="5" style="width:6rem;padding:0.35rem 0.5rem;border:1px solid #d1d5db;border-radius:4px;font-size:1rem;" />
+        </label>
+        <div style="font-size:0.9rem;color:#6b7280;padding-bottom:0.35rem;">
+          Effective rate: <strong id="effective-rate-display">12.0</strong> sats/min
+        </div>
+      </div>
+      <button id="start-session-btn" type="button" style="margin-top:1rem;padding:0.5rem 1.25rem;background:#2563eb;color:#fff;border:none;border-radius:4px;font-size:0.95rem;font-weight:600;cursor:pointer;">Start Session</button>
+    </div>
+
     <div id="session-container" style="display:none">
       <p>Share this session ID with your viewer:</p>
       <p id="session-id"></p>

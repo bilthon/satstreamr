@@ -27,6 +27,8 @@ export interface CreateSessionMessage {
   type: 'create_session';
   tutorPubkey: string;
   mintUrl: string;
+  rateSatsPerInterval?: number;
+  intervalSeconds?: number;
 }
 
 export interface JoinSessionMessage {
@@ -83,6 +85,8 @@ export interface SessionCreatedMessage {
   sessionId: string;
   tutorPubkey: string;
   mintUrl: string;
+  rateSatsPerInterval?: number;
+  intervalSeconds?: number;
 }
 
 export interface ViewerJoinedMessage {
