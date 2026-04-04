@@ -250,3 +250,55 @@
   word-break: break-all;
   min-height: 1.2em;
 }
+
+/* ------------------------------------------------------------
+   Mint mismatch blocking overlay (Unit 18)
+   ------------------------------------------------------------ */
+
+#mint-mismatch-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  background: rgba(180, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#mint-mismatch-overlay.hidden {
+  display: none;
+}
+
+.mint-mismatch-card {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 2rem 2.5rem;
+  max-width: 480px;
+  width: 90%;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  text-align: center;
+}
+
+.mint-mismatch-card h2 {
+  margin: 0 0 1rem;
+  font-size: 1.5rem;
+  color: #b91c1c;
+}
+
+.mint-mismatch-card p {
+  margin: 0.6rem 0;
+  font-size: 0.95rem;
+  color: #374151;
+  word-break: break-all;
+}
+
+.mint-mismatch-card code {
+  display: inline-block;
+  background: #f3f4f6;
+  border-radius: 3px;
+  padding: 0.1rem 0.35rem;
+  font-family: monospace;
+  font-size: 0.9em;
+  color: #1a1a2e;
+  word-break: break-all;
+}

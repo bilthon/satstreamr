@@ -6,6 +6,7 @@ import { mintP2PKToken } from '../lib/cashu-wallet.js';
 import { PaymentScheduler } from '../lib/payment-scheduler.js';
 import type { SignalingMessage } from '../types/signaling.js';
 import { saveSession, loadSession, updateSession, clearSession } from '../lib/session-storage.js';
+import { assertSameMint, MintMismatchError } from '../lib/mint-guard.js';
 
 const signalingUrl = (import.meta.env['VITE_SIGNALING_URL'] as string | undefined) ?? 'ws://localhost:8080';
 const mintUrl = (import.meta.env['VITE_MINT_URL'] as string | undefined) ?? '';
@@ -31,6 +32,19 @@ const summaryDurationEl = document.getElementById('summary-duration');
 const summarySatsEl = document.getElementById('summary-sats');
 const summaryChunksEl = document.getElementById('summary-chunks');
 const summaryCloseBtnEl = document.getElementById('summary-close-btn');
+
+// Mint mismatch overlay
+const mintMismatchOverlayEl = document.getElementById('mint-mismatch-overlay');
+const sessionMintUrlEl = document.getElementById('session-mint-url');
+const localMintUrlEl = document.getElementById('local-mint-url');
+
+function showMintMismatch(sessionMint: string, localMint: string): void {
+  if (sessionMintUrlEl !== null) sessionMintUrlEl.textContent = sessionMint;
+  if (localMintUrlEl !== null) localMintUrlEl.textContent = localMint;
+  if (mintMismatchOverlayEl !== null) {
+    mintMismatchOverlayEl.classList.remove('hidden');
+  }
+}
 
 // Reconnect overlay -- inserted programmatically so it works without HTML changes
 const reconnectOverlayEl = document.createElement('div');
@@ -435,7 +449,17 @@ peer.onTrack = (event) => {
 client.onMessage((msg: SignalingMessage) => {
   switch (msg.type) {
     case 'session_created':
-      // Viewer receives session_created after joining; extract tutorPubkey.
+      // Viewer receives session_created after joining; verify mint then extract tutorPubkey.
+      try {
+        assertSameMint(msg.mintUrl);
+      } catch (err) {
+        if (err instanceof MintMismatchError) {
+          showMintMismatch(err.sessionMintUrl, err.localMintUrl);
+          console.error('[viewer] mint mismatch — aborting session setup');
+          return;
+        }
+        throw err;
+      }
       tutorPubkey = msg.tutorPubkey;
       console.log('[viewer] tutorPubkey received:', tutorPubkey);
       break;

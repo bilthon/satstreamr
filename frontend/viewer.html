@@ -35,6 +35,16 @@
 
     <div id="error"></div>
 
+    <!-- Mint mismatch blocking overlay -->
+    <div id="mint-mismatch-overlay" class="hidden" role="alertdialog" aria-modal="true" aria-labelledby="mint-mismatch-title">
+      <div class="mint-mismatch-card">
+        <h2 id="mint-mismatch-title">Mint Mismatch</h2>
+        <p>This session requires mint: <code id="session-mint-url"></code></p>
+        <p>Your configured mint: <code id="local-mint-url"></code></p>
+        <p>Update your <code>VITE_MINT_URL</code> to join this session.</p>
+      </div>
+    </div>
+
     <!-- Session-end summary overlay -->
     <div id="session-summary-overlay" role="dialog" aria-modal="true" aria-labelledby="summary-title">
       <div id="session-summary-card">

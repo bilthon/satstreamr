@@ -26,6 +26,7 @@ export type OutboundMessageType =
 export interface CreateSessionMessage {
   type: 'create_session';
   tutorPubkey: string;
+  mintUrl: string;
 }
 
 export interface JoinSessionMessage {
@@ -81,6 +82,7 @@ export interface SessionCreatedMessage {
   type: 'session_created';
   sessionId: string;
   tutorPubkey: string;
+  mintUrl: string;
 }
 
 export interface ViewerJoinedMessage {
