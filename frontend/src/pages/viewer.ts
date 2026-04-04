@@ -7,6 +7,7 @@ import { PaymentScheduler } from '../lib/payment-scheduler.js';
 import type { SignalingMessage } from '../types/signaling.js';
 import { saveSession, loadSession, updateSession, clearSession } from '../lib/session-storage.js';
 import { assertSameMint, MintMismatchError } from '../lib/mint-guard.js';
+import { getBalance } from '../lib/wallet-store.js';
 
 const signalingUrl = (import.meta.env['VITE_SIGNALING_URL'] as string | undefined) ?? 'ws://localhost:8080';
 const mintUrl = (import.meta.env['VITE_MINT_URL'] as string | undefined) ?? '';
@@ -284,6 +285,13 @@ client.onConnect(() => {
   client.setSessionId(sessionId);
 
   // Load existing session or create a fresh one.
+  const walletBalance = getBalance();
+  if (walletBalance === 0) {
+    alert(
+      'Your wallet is empty. Please fund your wallet with Cashu tokens before joining a session.'
+    );
+  }
+
   const existing = loadSession();
   saveSession({
     sessionId,
@@ -291,8 +299,7 @@ client.onConnect(() => {
     role: 'viewer',
     chunkCount: existing?.chunkCount ?? 0,
     totalSatsPaid: existing?.totalSatsPaid ?? 0,
-    budgetRemaining: existing?.budgetRemaining ?? 100,
-    accumulatedProofs: existing?.accumulatedProofs ?? [],
+    budgetRemaining: existing?.budgetRemaining ?? walletBalance,
   });
 
   // Start media in parallel with session join
@@ -364,7 +371,7 @@ peer.onDataChannel = (event) => {
     const session = loadSession();
     const initialChunkId = session?.chunkCount ?? 0;
     const initialTotalSatsPaid = session?.totalSatsPaid ?? 0;
-    const budgetSats = session?.budgetRemaining ?? 100;
+    const budgetSats = session?.budgetRemaining ?? getBalance();
 
     // Sync nextChunkId for the DEV manual payment button.
     nextChunkId = initialChunkId;

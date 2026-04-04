@@ -1,5 +1,3 @@
-import type { Proof } from '@cashu/cashu-ts';
-
 export type Role = 'tutor' | 'viewer';
 
 export interface SessionState {
@@ -9,5 +7,4 @@ export interface SessionState {
   chunkCount: number;
   totalSatsPaid: number;
   budgetRemaining: number;
-  accumulatedProofs: Proof[];
 }
