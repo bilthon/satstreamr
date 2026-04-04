@@ -1,6 +1,6 @@
 # Satstreamr MVP — Progress Tracker
 
-Last updated: 2026-04-04 (Unit 13 complete)
+Last updated: 2026-04-04 (Units 13, 16 complete)
 
 ## Legend
 - ✅ Complete
@@ -27,7 +27,7 @@ Last updated: 2026-04-04 (Unit 13 complete)
 | 13 | Coturn + ICE Restart | ✅ | HMAC TURN credentials, ICE restart state machine, 15s countdown UI |
 | 14 | ~~Screen Sharing~~ | ❌ | Dropped — post-MVP |
 | 15 | ~~Browser Detection~~ | ❌ | Dropped — post-MVP |
-| 16 | Cash-out via Lightning Invoice | ⬜ | MVP |
+| 16 | Cash-out via Lightning Invoice | ✅ | getMeltQuote + meltTokens, proof persistence, 600s countdown UI |
 | 17 | ~~Session Recording~~ | ❌ | Dropped — post-MVP |
 | 18 | Same-Mint Enforcement | ⬜ | MVP |
 | 19 | ~~Tutor Invite Flow~~ | ❌ | Dropped — post-MVP |
