@@ -177,6 +177,311 @@
         color: #dc2626;
         margin-bottom: 0.75rem;
       }
+
+      /* ---- Withdraw panel ---- */
+      #withdraw-panel {
+        display: none;
+        border: 1px solid #6366f1;
+        border-radius: 6px;
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 1.25rem;
+        background: #f5f3ff;
+      }
+
+      #withdraw-panel h2 {
+        font-size: 1.1rem;
+        margin: 0 0 0.75rem;
+        color: #3730a3;
+      }
+
+      #withdraw-invoice-input {
+        width: 100%;
+        padding: 0.6rem 0.75rem;
+        border: 1px solid #c4b5fd;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 0.8rem;
+        color: #1a1a2e;
+        resize: vertical;
+        min-height: 4.5rem;
+        background: #fff;
+        margin-bottom: 0.75rem;
+        box-sizing: border-box;
+      }
+
+      #withdraw-invoice-input:focus {
+        outline: 2px solid #6366f1;
+        outline-offset: 1px;
+      }
+
+      #withdraw-quote-display {
+        display: none;
+        background: #ede9fe;
+        border: 1px solid #c4b5fd;
+        border-radius: 4px;
+        padding: 0.65rem 0.9rem;
+        font-size: 0.9rem;
+        color: #3730a3;
+        margin-bottom: 0.75rem;
+      }
+
+      #withdraw-status {
+        display: none;
+        font-size: 0.9rem;
+        margin-bottom: 0.75rem;
+        padding: 0.6rem 0.9rem;
+        border-radius: 4px;
+      }
+
+      #withdraw-status.status-info {
+        background: #e0f2fe;
+        color: #0369a1;
+        border: 1px solid #bae6fd;
+      }
+
+      #withdraw-status.status-success {
+        background: #dcfce7;
+        color: #166534;
+        border: 1px solid #bbf7d0;
+      }
+
+      #withdraw-status.status-error {
+        background: #fef2f2;
+        color: #dc2626;
+        border: 1px solid #fecaca;
+      }
+
+      #withdraw-status.status-warning {
+        background: #fffbeb;
+        color: #92400e;
+        border: 1px solid #fde68a;
+      }
+
+      .withdraw-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .btn-withdraw {
+        padding: 0.45rem 1rem;
+        border: none;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
+      }
+
+      .btn-withdraw-primary {
+        background: #6366f1;
+        color: #fff;
+      }
+
+      .btn-withdraw-primary:hover:not(:disabled) {
+        background: #4f46e5;
+      }
+
+      .btn-withdraw-primary:disabled {
+        background: #9ca3af;
+        cursor: not-allowed;
+      }
+
+      .btn-withdraw-secondary {
+        background: #fff;
+        color: #6366f1;
+        border: 1px solid #6366f1;
+      }
+
+      .btn-withdraw-secondary:hover:not(:disabled) {
+        background: #6366f1;
+        color: #fff;
+      }
+
+      .btn-withdraw-secondary:disabled {
+        border-color: #9ca3af;
+        color: #9ca3af;
+        cursor: not-allowed;
+      }
+
+      .btn-withdraw-ghost {
+        background: transparent;
+        color: #6b7280;
+        border: 1px solid #d1d5db;
+      }
+
+      .btn-withdraw-ghost:hover {
+        background: #f3f4f6;
+      }
+
+      /* ---- Deposit modal overlay ---- */
+      #deposit-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: 100;
+        align-items: center;
+        justify-content: center;
+      }
+
+      #deposit-overlay.is-open {
+        display: flex;
+      }
+
+      #deposit-panel {
+        background: #fff;
+        border-radius: 8px;
+        padding: 1.75rem 2rem;
+        width: min(460px, calc(100vw - 2rem));
+        max-height: calc(100vh - 2rem);
+        overflow-y: auto;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+      }
+
+      #deposit-panel h2 {
+        font-size: 1.2rem;
+        margin: 0 0 1.25rem;
+        color: #1a1a2e;
+      }
+
+      /* Amount row */
+      #deposit-amount-row {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1.25rem;
+      }
+
+      #deposit-amount-input {
+        flex: 1;
+        min-width: 0;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        font-size: 0.95rem;
+        color: #1a1a2e;
+      }
+
+      #deposit-amount-input:focus {
+        outline: 2px solid #3b82f6;
+        outline-offset: 1px;
+      }
+
+      /* Invoice display */
+      #deposit-invoice-area {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1.25rem;
+      }
+
+      #deposit-invoice-area.is-visible {
+        display: flex;
+      }
+
+      #deposit-qr-canvas {
+        border: 1px solid #e5e7eb;
+        border-radius: 4px;
+      }
+
+      #deposit-invoice-text {
+        width: 100%;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 4px;
+        padding: 0.6rem 0.75rem;
+        font-family: monospace;
+        font-size: 0.72rem;
+        color: #1a1a2e;
+        word-break: break-all;
+        white-space: pre-wrap;
+        margin: 0;
+        max-height: 5.5rem;
+        overflow-y: auto;
+      }
+
+      #deposit-copy-btn {
+        align-self: flex-end;
+        padding: 0.35rem 0.8rem;
+        border: 1px solid #3b82f6;
+        border-radius: 4px;
+        background: #fff;
+        color: #3b82f6;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
+      }
+
+      #deposit-copy-btn:hover {
+        background: #3b82f6;
+        color: #fff;
+      }
+
+      /* Status area */
+      #deposit-status {
+        display: none;
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+        text-align: center;
+        padding: 0.6rem 0.75rem;
+        border-radius: 4px;
+      }
+
+      #deposit-status.is-visible {
+        display: block;
+      }
+
+      #deposit-status.is-waiting {
+        color: #0369a1;
+        background: #e0f2fe;
+        border: 1px solid #bae6fd;
+      }
+
+      #deposit-status.is-success {
+        color: #166534;
+        background: #dcfce7;
+        border: 1px solid #bbf7d0;
+        font-weight: 600;
+      }
+
+      #deposit-status.is-expired {
+        color: #92400e;
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+      }
+
+      #deposit-status.is-error {
+        color: #dc2626;
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+      }
+
+      /* Spinner */
+      .deposit-spinner {
+        display: inline-block;
+        width: 0.85em;
+        height: 0.85em;
+        border: 2px solid #bae6fd;
+        border-top-color: #0369a1;
+        border-radius: 50%;
+        animation: deposit-spin 0.8s linear infinite;
+        vertical-align: -0.15em;
+        margin-right: 0.35em;
+      }
+
+      @keyframes deposit-spin {
+        to { transform: rotate(360deg); }
+      }
+
+      /* Footer buttons */
+      #deposit-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+      }
     </style>
   </head>
   <body>
@@ -188,6 +493,25 @@
       <span id="balance-display">Balance: — sats</span>
       <button class="wallet-btn" id="deposit-btn" type="button">Deposit</button>
       <button class="wallet-btn" id="withdraw-btn" type="button">Withdraw</button>
+    </div>
+
+    <!-- Withdraw panel (hidden by default, toggled by Withdraw button) -->
+    <div id="withdraw-panel">
+      <h2>Withdraw via Lightning</h2>
+      <textarea
+        id="withdraw-invoice-input"
+        placeholder="Paste Lightning invoice here"
+        autocomplete="off"
+        spellcheck="false"
+        rows="3"
+      ></textarea>
+      <div id="withdraw-quote-display"></div>
+      <div id="withdraw-status"></div>
+      <div class="withdraw-actions">
+        <button class="btn-withdraw btn-withdraw-primary" id="withdraw-get-quote-btn" type="button">Get Quote</button>
+        <button class="btn-withdraw btn-withdraw-secondary" id="withdraw-pay-btn" type="button" disabled>Pay Invoice</button>
+        <button class="btn-withdraw btn-withdraw-ghost" id="withdraw-close-btn" type="button">Close</button>
+      </div>
     </div>
 
     <!-- Session invite preview (shown when ?join= param is present) -->
@@ -221,6 +545,41 @@
         <button class="btn-primary" id="join-btn" type="button">Join</button>
       </div>
       <div id="join-error">Please enter a session ID.</div>
+    </div>
+
+    <!-- Deposit modal (hidden by default) -->
+    <div id="deposit-overlay" role="dialog" aria-modal="true" aria-labelledby="deposit-panel-title">
+      <div id="deposit-panel">
+        <h2 id="deposit-panel-title">Deposit via Lightning</h2>
+
+        <!-- Step 1: Amount + generate -->
+        <div id="deposit-amount-row">
+          <input
+            type="number"
+            id="deposit-amount-input"
+            placeholder="Amount in sats"
+            min="1"
+            step="1"
+            aria-label="Amount in satoshis"
+          />
+          <button class="btn-primary" id="deposit-generate-btn" type="button">Generate Invoice</button>
+        </div>
+
+        <!-- Step 2: QR code + invoice text -->
+        <div id="deposit-invoice-area" aria-live="polite">
+          <canvas id="deposit-qr-canvas" aria-label="Lightning invoice QR code"></canvas>
+          <pre id="deposit-invoice-text"></pre>
+          <button id="deposit-copy-btn" type="button">Copy Invoice</button>
+        </div>
+
+        <!-- Status messages -->
+        <div id="deposit-status" role="status" aria-live="polite"></div>
+
+        <!-- Footer -->
+        <div id="deposit-footer">
+          <button class="btn-primary" id="deposit-close-btn" type="button" style="background:#6b7280">Close</button>
+        </div>
+      </div>
     </div>
 
     <script type="module" src="/src/pages/home.ts"></script>
