@@ -73,6 +73,8 @@ export class PaymentScheduler {
   private retryCount = 0;
   // The encoded token for the current in-flight chunk (reused on retry)
   private inflightEncodedToken: string | null = null;
+  // The actual amount minted (chunkSats + swapFee) for the current in-flight chunk
+  private inflightMintedAmount = 0;
 
   // Listeners
   private budgetExhaustedListeners: Array<() => void> = [];
@@ -174,9 +176,11 @@ export class PaymentScheduler {
 
     // Mint a fresh token for this chunk.
     let encodedToken: string;
+    let mintedAmount: number;
     try {
       const proofs = await this.mintToken(this.opts.chunkSats, this.opts.tutorPubkey);
       encodedToken = this.encodeToken(proofs, this.opts.mintUrl);
+      mintedAmount = proofs.reduce((sum, p) => sum + p.amount, 0);
     } catch (err: unknown) {
       const reason = err instanceof Error ? err.message : String(err);
       console.error('[payment-scheduler] mintToken failed:', reason);
@@ -185,6 +189,7 @@ export class PaymentScheduler {
     }
 
     this.inflightEncodedToken = encodedToken;
+    this.inflightMintedAmount = mintedAmount;
     this.retryCount = 0;
     await this.sendChunk(chunkId, encodedToken);
   }
@@ -242,9 +247,12 @@ export class PaymentScheduler {
     this.pending = false;
     this.inflightEncodedToken = null;
 
-    // Decrement budget and increment totals.
-    this.budgetRemaining -= this.opts.chunkSats;
-    this.totalSatsPaid += this.opts.chunkSats;
+    // Decrement budget by the actual minted amount (chunkSats + swapFee) so
+    // the viewer's budget reflects what was truly spent from their Cashu wallet.
+    const spent = this.inflightMintedAmount;
+    this.inflightMintedAmount = 0;
+    this.budgetRemaining -= spent;
+    this.totalSatsPaid += spent;
     const paidChunkId = this.chunkId;
     this.chunkId += 1;
 
