@@ -9,6 +9,7 @@ import { checkTokenState, redeemToken, getMeltQuote, meltTokens } from '../lib/c
 import type { SignalingMessage } from '../types/signaling.js';
 import { saveSession, loadSession, clearSession } from '../lib/session-storage.js';
 import { getProofs, addProofs } from '../lib/wallet-store.js';
+import { createInviteUrl } from '../lib/session-invite.js';
 
 const signalingUrl = (import.meta.env['VITE_SIGNALING_URL'] as string | undefined) ?? 'ws://localhost:8080';
 
@@ -33,6 +34,12 @@ const summaryDurationEl = document.getElementById('summary-duration');
 const summarySatsEl = document.getElementById('summary-sats');
 const summaryChunksEl = document.getElementById('summary-chunks');
 const summaryCloseBtnEl = document.getElementById('summary-close-btn');
+
+// Invite display elements
+const inviteSectionEl = document.getElementById('invite-section');
+const inviteSessionIdEl = document.getElementById('invite-session-id');
+const inviteUrlEl = document.getElementById('invite-url');
+const copyInviteBtnEl = document.getElementById('copy-invite-btn') as HTMLButtonElement | null;
 
 // Cash-out UI elements
 const invoiceInputEl = document.getElementById('invoice-input') as HTMLInputElement | null;
@@ -601,6 +608,40 @@ function handleSessionCreated(id: string): void {
   }
   if (sessionContainerEl !== null) {
     sessionContainerEl.style.display = 'block';
+  }
+
+  // Build and display the invite
+  const inviteUrl = createInviteUrl({
+    sessionId: id,
+    tutorPubkey: tutorPubkeyHex,
+    rateSatsPerInterval: 2,
+    intervalSeconds: 10,
+    mintUrl: (import.meta.env['VITE_MINT_URL'] as string | undefined) ?? '',
+  });
+
+  if (inviteSessionIdEl !== null) {
+    inviteSessionIdEl.textContent = id;
+  }
+  if (inviteUrlEl !== null) {
+    inviteUrlEl.textContent = inviteUrl;
+  }
+  if (inviteSectionEl !== null) {
+    inviteSectionEl.style.display = 'block';
+  }
+
+  if (copyInviteBtnEl !== null) {
+    copyInviteBtnEl.addEventListener('click', () => {
+      navigator.clipboard.writeText(inviteUrl).then(() => {
+        if (copyInviteBtnEl === null) return;
+        const original = copyInviteBtnEl.textContent;
+        copyInviteBtnEl.textContent = 'Copied!';
+        setTimeout(() => {
+          copyInviteBtnEl.textContent = original;
+        }, 1800);
+      }).catch((err: unknown) => {
+        console.error('[invite] clipboard write failed', err);
+      });
+    });
   }
 
   setStatus('session created -- waiting for viewer\u2026');

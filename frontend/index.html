@@ -163,12 +163,11 @@
         border: 1px solid #e5e7eb;
         border-radius: 4px;
         padding: 0.75rem;
-        font-family: monospace;
-        font-size: 0.8rem;
+        font-size: 0.88rem;
         color: #1a1a2e;
         word-break: break-all;
-        white-space: pre-wrap;
-        margin: 0 0 1rem;
+        margin: 0 0 0.25rem;
+        line-height: 1.7;
       }
 
       #invite-decode-error {
@@ -517,10 +516,10 @@
     <!-- Session invite preview (shown when ?join= param is present) -->
     <div id="invite-panel">
       <h2>Session Invite</h2>
-      <p>You received an invite link. Decoded content:</p>
+      <p>You received an invite link. Session details:</p>
       <div id="invite-decode-error"></div>
-      <pre id="invite-json"></pre>
-      <button class="btn-primary" id="invite-join-btn" type="button">Join This Session</button>
+      <div id="invite-json"></div>
+      <button class="btn-primary" id="invite-join-btn" type="button" style="margin-top:0.75rem;padding:0.65rem 1.6rem;font-size:1.05rem;">Join This Session</button>
     </div>
 
     <!-- Start streaming (tutor) -->
