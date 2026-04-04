@@ -1,5 +1,8 @@
 # Polar LND credentials — never commit real secrets
 infra/.env.polar
+
+# Coturn shared secret — never commit
+infra/coturn.env
 infra/lnd-mint-creds/
 
 # Nutshell Cashu mint — secrets and generated data
