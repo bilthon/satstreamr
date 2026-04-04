@@ -278,6 +278,7 @@ client.onConnect(() => {
     chunkCount: existing?.chunkCount ?? 0,
     totalSatsPaid: existing?.totalSatsPaid ?? 0,
     budgetRemaining: existing?.budgetRemaining ?? 100,
+    accumulatedProofs: existing?.accumulatedProofs ?? [],
   });
 
   // Start media in parallel with session join

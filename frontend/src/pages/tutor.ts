@@ -5,9 +5,9 @@ import type { Proof } from '../types/cashu.js';
 import { SignalingClient } from '../signaling-client.js';
 import { PeerConnection } from '../lib/peer-connection.js';
 import { DataChannel } from '../lib/data-channel.js';
-import { checkTokenState, redeemToken } from '../lib/cashu-wallet.js';
+import { checkTokenState, redeemToken, getMeltQuote, meltTokens } from '../lib/cashu-wallet.js';
 import type { SignalingMessage } from '../types/signaling.js';
-import { saveSession, loadSession, clearSession } from '../lib/session-storage.js';
+import { saveSession, loadSession, clearSession, updateSession } from '../lib/session-storage.js';
 
 const signalingUrl = (import.meta.env['VITE_SIGNALING_URL'] as string | undefined) ?? 'ws://localhost:8080';
 
@@ -32,6 +32,12 @@ const summaryDurationEl = document.getElementById('summary-duration');
 const summarySatsEl = document.getElementById('summary-sats');
 const summaryChunksEl = document.getElementById('summary-chunks');
 const summaryCloseBtnEl = document.getElementById('summary-close-btn');
+
+// Cash-out UI elements
+const invoiceInputEl = document.getElementById('invoice-input') as HTMLInputElement | null;
+const invoiceCountdownEl = document.getElementById('invoice-countdown');
+const payInvoiceBtnEl = document.getElementById('pay-invoice-btn') as HTMLButtonElement | null;
+const cashoutStatusEl = document.getElementById('cashout-status');
 
 // Reconnect overlay -- inserted programmatically so it works without HTML changes
 const reconnectOverlayEl = document.createElement('div');
@@ -81,6 +87,7 @@ let elapsedTimerHandle: ReturnType<typeof setInterval> | null = null;
 let totalSatsReceived = 0;
 let totalChunksReceived = 0;
 let summaryShown = false;
+let invoiceCountdownHandle: ReturnType<typeof setInterval> | null = null;
 
 /** Format seconds as MM:SS. */
 function formatElapsed(totalSeconds: number): string {
@@ -146,6 +153,42 @@ function hidePaymentPausedBanner(): void {
   }
 }
 
+/** Clear the invoice countdown timer. */
+function clearInvoiceCountdown(): void {
+  if (invoiceCountdownHandle !== null) {
+    clearInterval(invoiceCountdownHandle);
+    invoiceCountdownHandle = null;
+  }
+  if (invoiceCountdownEl !== null) {
+    invoiceCountdownEl.textContent = '';
+    invoiceCountdownEl.style.color = '';
+  }
+}
+
+/** Start a 600s countdown displayed in #invoice-countdown. */
+function startInvoiceCountdown(): void {
+  clearInvoiceCountdown();
+  let remaining = 600;
+  const update = (): void => {
+    if (invoiceCountdownEl === null) return;
+    invoiceCountdownEl.textContent = `${String(remaining)}s`;
+    invoiceCountdownEl.style.color = remaining <= 60 ? '#dc2626' : '';
+  };
+  update();
+  invoiceCountdownHandle = setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) {
+      clearInvoiceCountdown();
+      if (invoiceCountdownEl !== null) {
+        invoiceCountdownEl.textContent = 'expired';
+        invoiceCountdownEl.style.color = '#dc2626';
+      }
+    } else {
+      update();
+    }
+  }, 1000);
+}
+
 /** Show the session-end summary overlay. */
 function showSessionSummary(): void {
   if (summaryShown) return;
@@ -165,6 +208,116 @@ function showSessionSummary(): void {
   }
   if (sessionSummaryOverlayEl !== null) {
     sessionSummaryOverlayEl.classList.add('visible');
+  }
+
+  // Wire up cash-out logic
+  wireCashOut();
+}
+
+/** Display a message in #cashout-status, optionally styled as an error. */
+function setCashoutStatus(text: string, isError = false): void {
+  if (cashoutStatusEl === null) return;
+  cashoutStatusEl.textContent = text;
+  cashoutStatusEl.style.color = isError ? '#dc2626' : '';
+}
+
+/** Determine valid invoice prefix based on environment. */
+function validInvoicePrefix(): string {
+  return import.meta.env.DEV ? 'lnbcrt' : 'lnbc';
+}
+
+/** Wire up invoice input and pay button in the session summary overlay. */
+function wireCashOut(): void {
+  if (invoiceInputEl === null || payInvoiceBtnEl === null) return;
+
+  // Load accumulated proofs from session storage
+  const session = loadSession();
+  const accumulatedProofs: Proof[] = session?.accumulatedProofs ?? [];
+
+  // Invoice input: validate prefix and start countdown on paste/input
+  invoiceInputEl.addEventListener('input', () => {
+    clearInvoiceCountdown();
+    setCashoutStatus('');
+    const value = invoiceInputEl.value.trim();
+    if (value.length === 0) return;
+
+    const prefix = validInvoicePrefix();
+    if (!value.toLowerCase().startsWith(prefix)) {
+      setCashoutStatus(
+        `Invalid invoice — expected a ${import.meta.env.DEV ? 'regtest' : 'mainnet'} invoice (${prefix}\u2026)`,
+        true
+      );
+      return;
+    }
+
+    startInvoiceCountdown();
+  });
+
+  // Pay button click handler
+  payInvoiceBtnEl.addEventListener('click', () => {
+    void handlePayInvoice(accumulatedProofs);
+  });
+}
+
+async function handlePayInvoice(proofs: Proof[]): Promise<void> {
+  if (invoiceInputEl === null || payInvoiceBtnEl === null) return;
+
+  const invoice = invoiceInputEl.value.trim();
+  if (invoice.length === 0) {
+    setCashoutStatus('Please paste a Lightning invoice first.', true);
+    return;
+  }
+
+  const prefix = validInvoicePrefix();
+  if (!invoice.toLowerCase().startsWith(prefix)) {
+    setCashoutStatus(
+      `Invalid invoice — expected a ${import.meta.env.DEV ? 'regtest' : 'mainnet'} invoice (${prefix}\u2026)`,
+      true
+    );
+    return;
+  }
+
+  if (proofs.length === 0) {
+    setCashoutStatus('No accumulated proofs to pay with.', true);
+    return;
+  }
+
+  payInvoiceBtnEl.disabled = true;
+  setCashoutStatus('Fetching quote\u2026');
+
+  let quoteId: string;
+  let amount: number;
+  let feeReserve: number;
+
+  try {
+    const quote = await getMeltQuote(invoice);
+    quoteId = quote.quote;
+    amount = quote.amount;
+    feeReserve = quote.fee_reserve;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    setCashoutStatus(msg, true);
+    payInvoiceBtnEl.disabled = false;
+    return;
+  }
+
+  setCashoutStatus(`Paying ${String(amount)} sats + up to ${String(feeReserve)} sats fee\u2026`);
+
+  try {
+    const result = await meltTokens(invoice, quoteId, proofs);
+    if (result.paid) {
+      clearInvoiceCountdown();
+      const preimage = result.payment_preimage ?? '(none)';
+      setCashoutStatus(`\u2713 Payment sent! Preimage: ${preimage}`);
+      // Button stays disabled — payment is complete
+    } else {
+      setCashoutStatus('Payment not confirmed by mint. Please retry.', true);
+      payInvoiceBtnEl.disabled = false;
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    setCashoutStatus(msg, true);
+    payInvoiceBtnEl.disabled = false;
   }
 }
 
@@ -360,7 +513,7 @@ async function handleTokenPayment(chunkId: number, encodedToken: string): Promis
 
   // 3. Redeem (NUT-03 swap with NUT-11 P2PK signature)
   try {
-    await redeemToken(proofs, tutorPrivkeyHex);
+    const { newProofs } = await redeemToken(proofs, tutorPrivkeyHex);
     lastSeenChunkId = chunkId;
     console.log(`[payment] ack #${chunkId}`);
     dataChannel.sendMessage({ type: 'payment_ack', chunkId });
@@ -369,6 +522,11 @@ async function handleTokenPayment(chunkId: number, encodedToken: string): Promis
     // the decoded proofs total rather than hardcoding the chunk size).
     const chunkSats = (proofs as Proof[]).reduce((sum: number, p: Proof) => sum + p.amount, 0);
     updateSatsReceived(chunkSats);
+
+    // Persist the newly redeemed proofs so they are available for cash-out.
+    const existingSession = loadSession();
+    const existingProofs: Proof[] = existingSession?.accumulatedProofs ?? [];
+    updateSession({ accumulatedProofs: [...existingProofs, ...newProofs] });
 
     // If the payment was previously paused and a new chunk just succeeded, hide the banner.
     hidePaymentPausedBanner();
@@ -437,6 +595,7 @@ function handleSessionCreated(id: string): void {
     chunkCount: 0,
     totalSatsPaid: 0,
     budgetRemaining: 0,
+    accumulatedProofs: [],
   });
 
   if (sessionIdEl !== null) {

@@ -171,3 +171,82 @@
 #session-summary-card #summary-close-btn:hover {
   background: #2563eb;
 }
+
+/* ------------------------------------------------------------
+   Cash-out section (Unit 16)
+   ------------------------------------------------------------ */
+
+#cashout-section {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #e5e7eb;
+  text-align: left;
+}
+
+#cashout-section h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  color: #1a1a2e;
+}
+
+#invoice-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+#invoice-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: #1a1a2e;
+}
+
+#invoice-input:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
+}
+
+#invoice-countdown {
+  font-size: 0.85rem;
+  font-family: monospace;
+  white-space: nowrap;
+  min-width: 3.5rem;
+  text-align: right;
+}
+
+#pay-invoice-btn {
+  display: block;
+  width: 100%;
+  padding: 0.55rem 1rem;
+  background: #16a34a;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+#pay-invoice-btn:hover:not(:disabled) {
+  background: #15803d;
+}
+
+#pay-invoice-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+#cashout-status {
+  margin-top: 0.6rem;
+  font-size: 0.88rem;
+  word-break: break-all;
+  min-height: 1.2em;
+}

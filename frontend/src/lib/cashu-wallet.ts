@@ -202,7 +202,7 @@ export async function mintP2PKToken(
 export async function redeemToken(
   proofs: Proof[],
   privkeyHex: string
-): Promise<{ success: boolean }> {
+): Promise<{ success: boolean; newProofs: Proof[] }> {
   const { wallet, feePpk } = await buildWallet();
 
   const totalAmount = proofs.reduce((s, p) => s + p.amount, 0);
@@ -219,12 +219,99 @@ export async function redeemToken(
     privkey: privkeyHex,
   });
 
-  const redeemedProofs = [...swapResult.keep, ...swapResult.send];
-  if (!redeemedProofs || redeemedProofs.length === 0) {
+  const newProofs = [...swapResult.keep, ...swapResult.send];
+  if (!newProofs || newProofs.length === 0) {
     throw new Error('swap returned empty proofs — redemption failed');
   }
 
-  return { success: true };
+  return { success: true, newProofs };
+}
+
+// ---------------------------------------------------------------------------
+// Melt (cash-out) — NUT-05
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetches a melt quote from the mint for a BOLT11 invoice.
+ *
+ * @param invoice  BOLT11 Lightning invoice string.
+ * @returns Quote object containing `quote` ID, `amount`, and `fee_reserve`.
+ */
+export async function getMeltQuote(
+  invoice: string
+): Promise<{ quote: string; amount: number; fee_reserve: number }> {
+  const mintUrl = getMintUrl();
+  const response = await fetch(`${mintUrl}/v1/melt/quote/bolt11`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ unit: 'sat', request: invoice }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '(no body)');
+    throw new Error(`getMeltQuote failed: HTTP ${response.status} — ${text}`);
+  }
+
+  const data = (await response.json()) as { quote: string; amount: number; fee_reserve: number };
+  return data;
+}
+
+/**
+ * Melts Cashu proofs to pay a BOLT11 Lightning invoice (NUT-05).
+ *
+ * @param invoice   BOLT11 invoice to pay.
+ * @param quoteId   Quote ID previously obtained from getMeltQuote.
+ * @param proofs    Proofs to use as inputs for the payment.
+ * @returns `{ paid, payment_preimage }` on success.
+ * @throws A user-friendly error string on failure.
+ */
+export async function meltTokens(
+  invoice: string,
+  quoteId: string,
+  proofs: Proof[]
+): Promise<{ paid: boolean; payment_preimage: string | null }> {
+  const mintUrl = getMintUrl();
+  const response = await fetch(`${mintUrl}/v1/melt/bolt11`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quote: quoteId, inputs: proofs }),
+  });
+
+  if (!response.ok) {
+    // Map common HTTP status codes / error patterns to friendly messages
+    if (response.status === 402) {
+      throw new Error('Not enough tokens to cover the invoice amount and fees');
+    }
+
+    const text = await response.text().catch(() => '');
+
+    // Check invoice prefix mismatch (regtest expects lnbcrt)
+    if (
+      invoice.length > 0 &&
+      !invoice.toLowerCase().startsWith('lnbcrt') &&
+      import.meta.env.DEV
+    ) {
+      throw new Error('Invalid invoice — expected a regtest invoice (lnbcrt\u2026)');
+    }
+
+    // Check for expiry keyword in error body
+    if (text.toLowerCase().includes('expir')) {
+      throw new Error('Invoice expired — please generate a new one');
+    }
+
+    // Generic fallback
+    let mintMessage = text;
+    try {
+      const parsed = JSON.parse(text) as { detail?: string; error?: string };
+      mintMessage = parsed.detail ?? parsed.error ?? text;
+    } catch {
+      // leave mintMessage as raw text
+    }
+    throw new Error(`Payment failed: ${mintMessage}`);
+  }
+
+  const data = (await response.json()) as { paid: boolean; payment_preimage: string | null };
+  return data;
 }
 
 /**
