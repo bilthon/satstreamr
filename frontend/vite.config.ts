@@ -2,10 +2,14 @@
 import { defineConfig } from 'vite'
 import { resolve } from 'path'
 import { fileURLToPath } from 'url'
+import basicSsl from '@vitejs/plugin-basic-ssl'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
 export default defineConfig({
+  plugins: [
+    basicSsl(),
+  ],
   build: {
     rollupOptions: {
       input: {
@@ -16,6 +20,7 @@ export default defineConfig({
     }
   },
   server: {
+    host: '0.0.0.0',
     proxy: {
       // Proxy LND customer REST calls so the browser avoids TLS errors from
       // the self-signed certificate used in the regtest docker environment.
@@ -24,6 +29,12 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/lnd-customer/, ''),
+      },
+      // Proxy signaling WebSocket through the Vite HTTPS origin so that LAN
+      // devices can connect without mixed-content (wss vs ws) errors.
+      '/ws': {
+        target: 'ws://localhost:8080',
+        ws: true,
       },
     },
   },
