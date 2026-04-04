@@ -29,6 +29,16 @@
       </p>
     </div>
 
+    <!-- Invite share section (visible after session creation) -->
+    <div id="invite-section" style="display:none;margin:1rem 0;padding:1.25rem 1.5rem;background:#f0f9ff;border:1px solid #38bdf8;border-radius:6px;">
+      <h2 style="font-size:1rem;margin:0 0 0.75rem;color:#0369a1;">Share Session</h2>
+      <p style="font-size:0.85rem;color:#555;margin:0 0 0.5rem;">Session code (read aloud):</p>
+      <div id="invite-session-id" style="font-family:monospace;font-size:2rem;font-weight:bold;letter-spacing:0.1em;color:#1a1a2e;word-break:break-all;margin-bottom:1rem;user-select:all;"></div>
+      <p style="font-size:0.85rem;color:#555;margin:0 0 0.4rem;">Invite link:</p>
+      <div id="invite-url" style="font-family:monospace;font-size:0.78rem;color:#374151;word-break:break-all;background:#fff;border:1px solid #e5e7eb;border-radius:4px;padding:0.5rem 0.65rem;margin-bottom:0.75rem;user-select:all;"></div>
+      <button id="copy-invite-btn" type="button" style="padding:0.45rem 1rem;background:#0ea5e9;color:#fff;border:none;border-radius:4px;font-size:0.9rem;font-weight:600;cursor:pointer;transition:background 0.15s ease;">Copy Invite Link</button>
+    </div>
+
     <!-- Session stats bar -->
     <div id="session-stats" style="display:none">
       <div>

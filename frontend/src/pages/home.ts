@@ -2,6 +2,7 @@ import QRCode from 'qrcode';
 import { getBalance, onBalanceChange, spendProofs, addProofs } from '../lib/wallet-store.js';
 import { getMeltQuote, meltTokens } from '../lib/cashu-wallet.js';
 import { requestMintQuote, pollForPayment, mintProofsFromQuote } from '../lib/deposit.js';
+import { parseInvite } from '../lib/session-invite.js';
 
 // ---------------------------------------------------------------------------
 // UI element references
@@ -508,54 +509,69 @@ const joinParam = params.get('join');
 if (joinParam !== null && invitePanelEl !== null) {
   invitePanelEl.style.display = 'block';
 
-  let decodedJson: string | null = null;
-  let inviteSessionId: string | null = null;
+  const invite = parseInvite(joinParam);
 
-  try {
-    const decoded = atob(joinParam);
-    // Attempt to pretty-print if it is valid JSON; fall back to raw text.
-    try {
-      const parsed: unknown = JSON.parse(decoded);
-      decodedJson = JSON.stringify(parsed, null, 2);
-      // If the decoded object has a sessionId field, pre-fill the join form.
-      if (
-        parsed !== null &&
-        typeof parsed === 'object' &&
-        'sessionId' in parsed &&
-        typeof (parsed as Record<string, unknown>)['sessionId'] === 'string'
-      ) {
-        inviteSessionId = (parsed as Record<string, unknown>)['sessionId'] as string;
-      }
-    } catch {
-      decodedJson = decoded;
-    }
+  if (invite !== null) {
+    // Build rich preview from decoded invite fields
+    const balance = getBalance();
+    // Estimated minutes = (balance / rateSatsPerInterval) * (intervalSeconds / 60)
+    const estimatedMinutes =
+      invite.rateSatsPerInterval > 0
+        ? Math.floor((balance / invite.rateSatsPerInterval) * (invite.intervalSeconds / 60))
+        : 0;
+
+    const rateLabel = `${invite.rateSatsPerInterval} sats every ${invite.intervalSeconds} seconds`;
+    const durationLabel =
+      balance > 0
+        ? `${balance} sats (~${String(estimatedMinutes)} min)`
+        : '0 sats (deposit first)';
 
     if (inviteJsonEl !== null) {
-      inviteJsonEl.textContent = decodedJson;
+      inviteJsonEl.innerHTML = [
+        `<strong>Rate:</strong> ${rateLabel}`,
+        `<strong>Mint:</strong> ${invite.mintUrl}`,
+        `<strong>Your balance:</strong> ${durationLabel}`,
+      ].join('<br>');
     }
-  } catch {
+
     if (inviteDecodeErrorEl !== null) {
-      inviteDecodeErrorEl.textContent = 'Failed to decode invite link — the base64 payload is invalid.';
+      inviteDecodeErrorEl.style.display = 'none';
+    }
+
+    // Wire up "Join This Session" button — store session params then navigate
+    if (inviteJoinBtnEl !== null) {
+      inviteJoinBtnEl.addEventListener('click', () => {
+        sessionStorage.setItem(
+          'pending_join',
+          JSON.stringify({
+            sessionId: invite.sessionId,
+            rateSatsPerInterval: invite.rateSatsPerInterval,
+            intervalSeconds: invite.intervalSeconds,
+            mintUrl: invite.mintUrl,
+          })
+        );
+        navigateToViewer(invite.sessionId);
+      });
+    }
+  } else {
+    // Invite could not be decoded — show error
+    if (inviteDecodeErrorEl !== null) {
+      inviteDecodeErrorEl.textContent = 'Failed to decode invite link — the base64 payload is invalid or missing required fields.';
       inviteDecodeErrorEl.style.display = 'block';
     }
     if (inviteJsonEl !== null) {
       inviteJsonEl.textContent = '';
     }
-  }
 
-  // Wire up the "Join This Session" button in the invite panel.
-  if (inviteJoinBtnEl !== null) {
-    inviteJoinBtnEl.addEventListener('click', () => {
-      if (inviteSessionId !== null) {
-        navigateToViewer(inviteSessionId);
-      } else {
-        // No sessionId found in decoded payload; prompt user to enter one manually.
+    // Fallback: button prompts manual entry
+    if (inviteJoinBtnEl !== null) {
+      inviteJoinBtnEl.addEventListener('click', () => {
         if (sessionIdInputEl !== null) {
           sessionIdInputEl.focus();
           sessionIdInputEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
-        showJoinError('Could not find a session ID in the invite. Please enter it manually.');
-      }
-    });
+        showJoinError('Could not decode the invite link. Please enter the session ID manually.');
+      });
+    }
   }
 }
