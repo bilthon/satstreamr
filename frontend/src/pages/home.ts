@@ -1,4 +1,7 @@
-import { getBalance, onBalanceChange } from '../lib/wallet-store.js';
+import QRCode from 'qrcode';
+import { getBalance, onBalanceChange, spendProofs, addProofs } from '../lib/wallet-store.js';
+import { getMeltQuote, meltTokens } from '../lib/cashu-wallet.js';
+import { requestMintQuote, pollForPayment, mintProofsFromQuote } from '../lib/deposit.js';
 
 // ---------------------------------------------------------------------------
 // UI element references
@@ -7,6 +10,15 @@ import { getBalance, onBalanceChange } from '../lib/wallet-store.js';
 const balanceDisplayEl = document.getElementById('balance-display');
 const depositBtnEl = document.getElementById('deposit-btn') as HTMLButtonElement | null;
 const withdrawBtnEl = document.getElementById('withdraw-btn') as HTMLButtonElement | null;
+
+// Withdraw panel elements
+const withdrawPanelEl = document.getElementById('withdraw-panel');
+const withdrawInvoiceInputEl = document.getElementById('withdraw-invoice-input') as HTMLTextAreaElement | null;
+const withdrawQuoteDisplayEl = document.getElementById('withdraw-quote-display');
+const withdrawStatusEl = document.getElementById('withdraw-status');
+const withdrawGetQuoteBtnEl = document.getElementById('withdraw-get-quote-btn') as HTMLButtonElement | null;
+const withdrawPayBtnEl = document.getElementById('withdraw-pay-btn') as HTMLButtonElement | null;
+const withdrawCloseBtnEl = document.getElementById('withdraw-close-btn') as HTMLButtonElement | null;
 
 const startStreamingBtnEl = document.getElementById('start-streaming-btn') as HTMLButtonElement | null;
 
@@ -38,20 +50,396 @@ onBalanceChange((balance) => {
 });
 
 // ---------------------------------------------------------------------------
-// Deposit / Withdraw placeholders (wired in Units 25 / 26)
+// Deposit modal — Unit 25
 // ---------------------------------------------------------------------------
 
+const depositOverlayEl = document.getElementById('deposit-overlay');
+const depositAmountInputEl = document.getElementById('deposit-amount-input') as HTMLInputElement | null;
+const depositGenerateBtnEl = document.getElementById('deposit-generate-btn') as HTMLButtonElement | null;
+const depositInvoiceAreaEl = document.getElementById('deposit-invoice-area');
+const depositQrCanvasEl = document.getElementById('deposit-qr-canvas') as HTMLCanvasElement | null;
+const depositInvoiceTextEl = document.getElementById('deposit-invoice-text');
+const depositCopyBtnEl = document.getElementById('deposit-copy-btn') as HTMLButtonElement | null;
+const depositStatusEl = document.getElementById('deposit-status');
+const depositCloseBtnEl = document.getElementById('deposit-close-btn') as HTMLButtonElement | null;
+
+/** Currently displayed invoice string (used by the copy button). */
+let depositCurrentInvoice: string | null = null;
+
+type DepositStatusVariant = 'waiting' | 'success' | 'expired' | 'error';
+
+function showDepositStatus(message: string, variant: DepositStatusVariant): void {
+  if (depositStatusEl === null) return;
+  depositStatusEl.className = `is-visible is-${variant}`;
+  depositStatusEl.innerHTML =
+    variant === 'waiting'
+      ? `<span class="deposit-spinner" aria-hidden="true"></span>${message}`
+      : message;
+}
+
+function hideDepositStatus(): void {
+  if (depositStatusEl === null) return;
+  depositStatusEl.className = '';
+  depositStatusEl.textContent = '';
+}
+
+function showDepositInvoice(invoice: string): void {
+  depositCurrentInvoice = invoice;
+
+  if (depositInvoiceTextEl !== null) {
+    depositInvoiceTextEl.textContent = invoice;
+  }
+
+  if (depositInvoiceAreaEl !== null) {
+    depositInvoiceAreaEl.classList.add('is-visible');
+  }
+
+  // Render QR code — prefix with "lightning:" for wallet compatibility.
+  if (depositQrCanvasEl !== null) {
+    QRCode.toCanvas(depositQrCanvasEl, `lightning:${invoice}`, { width: 220 }).catch((err: unknown) => {
+      console.error('[deposit] QR code render failed', err);
+    });
+  }
+}
+
+function hideDepositInvoice(): void {
+  depositCurrentInvoice = null;
+  if (depositInvoiceAreaEl !== null) {
+    depositInvoiceAreaEl.classList.remove('is-visible');
+  }
+  if (depositInvoiceTextEl !== null) {
+    depositInvoiceTextEl.textContent = '';
+  }
+}
+
+function resetDepositPanel(): void {
+  if (depositAmountInputEl !== null) depositAmountInputEl.value = '';
+  if (depositGenerateBtnEl !== null) depositGenerateBtnEl.disabled = false;
+  hideDepositInvoice();
+  hideDepositStatus();
+}
+
+function openDepositModal(): void {
+  resetDepositPanel();
+  if (depositOverlayEl !== null) depositOverlayEl.classList.add('is-open');
+  depositAmountInputEl?.focus();
+}
+
+function closeDepositModal(): void {
+  if (depositOverlayEl !== null) depositOverlayEl.classList.remove('is-open');
+  resetDepositPanel();
+}
+
+// Open deposit modal when Deposit button is clicked.
 if (depositBtnEl !== null) {
   depositBtnEl.addEventListener('click', () => {
-    // Unit 25 will implement this
-    console.log('[home] deposit button clicked — not yet implemented');
+    openDepositModal();
   });
 }
 
+// Close button dismisses the modal and resets state.
+if (depositCloseBtnEl !== null) {
+  depositCloseBtnEl.addEventListener('click', () => {
+    closeDepositModal();
+  });
+}
+
+// Close modal when clicking outside the panel (on the overlay backdrop).
+if (depositOverlayEl !== null) {
+  depositOverlayEl.addEventListener('click', (event: MouseEvent) => {
+    if (event.target === depositOverlayEl) {
+      closeDepositModal();
+    }
+  });
+}
+
+// Close modal on Escape key.
+document.addEventListener('keydown', (event: KeyboardEvent) => {
+  if (event.key === 'Escape' && depositOverlayEl?.classList.contains('is-open')) {
+    closeDepositModal();
+  }
+});
+
+// Copy button copies the invoice to clipboard.
+if (depositCopyBtnEl !== null) {
+  depositCopyBtnEl.addEventListener('click', () => {
+    if (depositCurrentInvoice === null) return;
+    navigator.clipboard.writeText(depositCurrentInvoice).then(() => {
+      const original = depositCopyBtnEl.textContent;
+      depositCopyBtnEl.textContent = 'Copied!';
+      setTimeout(() => {
+        depositCopyBtnEl.textContent = original;
+      }, 1800);
+    }).catch((err: unknown) => {
+      console.error('[deposit] clipboard write failed', err);
+    });
+  });
+}
+
+// Generate Invoice button: request quote, render QR, then poll for payment.
+if (depositGenerateBtnEl !== null) {
+  depositGenerateBtnEl.addEventListener('click', () => {
+    const rawAmount = depositAmountInputEl?.value.trim() ?? '';
+    const amount = parseInt(rawAmount, 10);
+
+    if (!rawAmount || isNaN(amount) || amount <= 0) {
+      showDepositStatus('Please enter a valid amount in sats.', 'error');
+      return;
+    }
+
+    depositGenerateBtnEl.disabled = true;
+    hideDepositInvoice();
+    hideDepositStatus();
+
+    void (async () => {
+      let quoteId: string;
+      let invoice: string;
+
+      try {
+        ({ quote: quoteId, invoice } = await requestMintQuote(amount));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        showDepositStatus(`Failed to generate invoice: ${message}`, 'error');
+        depositGenerateBtnEl.disabled = false;
+        return;
+      }
+
+      showDepositInvoice(invoice);
+      showDepositStatus('Waiting for payment…', 'waiting');
+
+      let paid: boolean;
+      try {
+        paid = await pollForPayment(quoteId);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        showDepositStatus(`Payment check failed: ${message}`, 'error');
+        depositGenerateBtnEl.disabled = false;
+        return;
+      }
+
+      if (!paid) {
+        showDepositStatus('Invoice expired — please try again.', 'expired');
+        depositGenerateBtnEl.disabled = false;
+        return;
+      }
+
+      try {
+        await mintProofsFromQuote(quoteId, amount);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        showDepositStatus(`Deposit confirmed but minting failed: ${message}`, 'error');
+        depositGenerateBtnEl.disabled = false;
+        return;
+      }
+
+      // Balance is updated reactively via onBalanceChange — just show success.
+      showDepositStatus(`Deposited ${amount} sats!`, 'success');
+      depositGenerateBtnEl.disabled = false;
+    })();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Withdraw panel — Unit 26
+// ---------------------------------------------------------------------------
+
+/** Withdraw flow state */
+interface WithdrawState {
+  quoteId: string | null;
+  quoteAmount: number;
+  quoteFeeReserve: number;
+}
+
+const withdrawState: WithdrawState = {
+  quoteId: null,
+  quoteAmount: 0,
+  quoteFeeReserve: 0,
+};
+
+type StatusVariant = 'info' | 'success' | 'error' | 'warning';
+
+function showWithdrawStatus(message: string, variant: StatusVariant = 'info'): void {
+  if (withdrawStatusEl === null) return;
+  withdrawStatusEl.textContent = message;
+  withdrawStatusEl.className = `status-${variant}`;
+  withdrawStatusEl.style.display = 'block';
+}
+
+function hideWithdrawStatus(): void {
+  if (withdrawStatusEl === null) return;
+  withdrawStatusEl.style.display = 'none';
+  withdrawStatusEl.textContent = '';
+  withdrawStatusEl.className = '';
+}
+
+function showWithdrawQuote(amount: number, fee: number): void {
+  if (withdrawQuoteDisplayEl === null) return;
+  const total = amount + fee;
+  withdrawQuoteDisplayEl.textContent = `Amount: ${amount} sats, Fee: ${fee} sats, Total: ${total} sats`;
+  withdrawQuoteDisplayEl.style.display = 'block';
+}
+
+function hideWithdrawQuote(): void {
+  if (withdrawQuoteDisplayEl === null) return;
+  withdrawQuoteDisplayEl.style.display = 'none';
+  withdrawQuoteDisplayEl.textContent = '';
+}
+
+function resetWithdrawPanel(): void {
+  if (withdrawInvoiceInputEl !== null) withdrawInvoiceInputEl.value = '';
+  if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = true;
+  if (withdrawGetQuoteBtnEl !== null) withdrawGetQuoteBtnEl.disabled = false;
+  hideWithdrawQuote();
+  hideWithdrawStatus();
+  withdrawState.quoteId = null;
+  withdrawState.quoteAmount = 0;
+  withdrawState.quoteFeeReserve = 0;
+}
+
+function openWithdrawPanel(): void {
+  resetWithdrawPanel();
+  if (withdrawPanelEl !== null) withdrawPanelEl.style.display = 'block';
+  withdrawInvoiceInputEl?.focus();
+}
+
+function closeWithdrawPanel(): void {
+  if (withdrawPanelEl !== null) withdrawPanelEl.style.display = 'none';
+  resetWithdrawPanel();
+}
+
+/** Validates invoice prefix. Returns a warning string or null if OK. */
+function checkInvoicePrefix(invoice: string): string | null {
+  const lower = invoice.toLowerCase();
+  if (lower.startsWith('lnbc') || lower.startsWith('lnbcrt')) {
+    return null; // valid mainnet or regtest
+  }
+  return `Unrecognised invoice prefix — expected lnbc… (mainnet) or lnbcrt… (regtest). Continuing anyway, but payment may fail.`;
+}
+
+// Open withdraw panel when Withdraw button clicked
 if (withdrawBtnEl !== null) {
   withdrawBtnEl.addEventListener('click', () => {
-    // Unit 26 will implement this
-    console.log('[home] withdraw button clicked — not yet implemented');
+    openWithdrawPanel();
+  });
+}
+
+// Close button
+if (withdrawCloseBtnEl !== null) {
+  withdrawCloseBtnEl.addEventListener('click', () => {
+    closeWithdrawPanel();
+  });
+}
+
+// Get Quote button
+if (withdrawGetQuoteBtnEl !== null) {
+  withdrawGetQuoteBtnEl.addEventListener('click', async () => {
+    const invoice = withdrawInvoiceInputEl?.value.trim() ?? '';
+
+    if (invoice.length === 0) {
+      showWithdrawStatus('Please paste a Lightning invoice.', 'error');
+      return;
+    }
+
+    // Prefix warning
+    const prefixWarning = checkInvoicePrefix(invoice);
+    if (prefixWarning !== null) {
+      showWithdrawStatus(prefixWarning, 'warning');
+    } else {
+      hideWithdrawStatus();
+    }
+
+    // Reset prior quote state
+    hideWithdrawQuote();
+    if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = true;
+    if (withdrawGetQuoteBtnEl !== null) withdrawGetQuoteBtnEl.disabled = true;
+
+    try {
+      showWithdrawStatus('Fetching quote…', 'info');
+      const quote = await getMeltQuote(invoice);
+
+      withdrawState.quoteId = quote.quote;
+      withdrawState.quoteAmount = quote.amount;
+      withdrawState.quoteFeeReserve = quote.fee_reserve;
+
+      const total = quote.amount + quote.fee_reserve;
+      const balance = getBalance();
+
+      showWithdrawQuote(quote.amount, quote.fee_reserve);
+
+      if (balance < total) {
+        showWithdrawStatus(
+          `Insufficient balance — you have ${balance} sats, need ${total} sats`,
+          'error'
+        );
+        if (withdrawGetQuoteBtnEl !== null) withdrawGetQuoteBtnEl.disabled = false;
+        return;
+      }
+
+      hideWithdrawStatus();
+      if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = false;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      showWithdrawStatus(`Failed to get quote: ${message}`, 'error');
+    } finally {
+      if (withdrawGetQuoteBtnEl !== null) withdrawGetQuoteBtnEl.disabled = false;
+    }
+  });
+}
+
+// Pay Invoice button
+if (withdrawPayBtnEl !== null) {
+  withdrawPayBtnEl.addEventListener('click', async () => {
+    const invoice = withdrawInvoiceInputEl?.value.trim() ?? '';
+    const { quoteId, quoteAmount, quoteFeeReserve } = withdrawState;
+
+    if (quoteId === null || invoice.length === 0) {
+      showWithdrawStatus('Please get a quote first.', 'error');
+      return;
+    }
+
+    const totalNeeded = quoteAmount + quoteFeeReserve;
+
+    // Disable both action buttons while paying
+    if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = true;
+    if (withdrawGetQuoteBtnEl !== null) withdrawGetQuoteBtnEl.disabled = true;
+
+    showWithdrawStatus('Paying…', 'info');
+
+    let selectedProofs;
+    try {
+      selectedProofs = spendProofs(totalNeeded);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      showWithdrawStatus(`Insufficient balance — ${message}`, 'error');
+      if (withdrawGetQuoteBtnEl !== null) withdrawGetQuoteBtnEl.disabled = false;
+      if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = false;
+      return;
+    }
+
+    try {
+      const result = await meltTokens(invoice, quoteId, selectedProofs);
+
+      if (result.paid) {
+        const preimage = result.payment_preimage ?? '(none)';
+        showWithdrawStatus(`Payment sent! Preimage: ${preimage}`, 'success');
+        if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = true;
+        if (withdrawGetQuoteBtnEl !== null) withdrawGetQuoteBtnEl.disabled = false;
+        // Balance already updated by spendProofs removing proofs from the store
+      } else {
+        // Mint returned paid: false — return proofs
+        addProofs(selectedProofs);
+        showWithdrawStatus('Payment did not complete — proofs returned to wallet. Please try again.', 'error');
+        if (withdrawGetQuoteBtnEl !== null) withdrawGetQuoteBtnEl.disabled = false;
+        if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = false;
+      }
+    } catch (err) {
+      // Melt failed — return the proofs so balance is unchanged
+      addProofs(selectedProofs);
+      const message = err instanceof Error ? err.message : String(err);
+      showWithdrawStatus(`Payment failed: ${message} — proofs returned to wallet.`, 'error');
+      if (withdrawGetQuoteBtnEl !== null) withdrawGetQuoteBtnEl.disabled = false;
+      if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = false;
+    }
   });
 }
 
