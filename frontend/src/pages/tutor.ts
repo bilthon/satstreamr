@@ -24,6 +24,13 @@ const localVideoEl = document.getElementById('local-video') as HTMLVideoElement 
 const errorEl = document.getElementById('error');
 const dcStatusEl = document.getElementById('dc-status');
 
+// Rate configuration UI elements
+const rateConfigEl = document.getElementById('rate-config');
+const rateSatsInputEl = document.getElementById('rate-sats-input') as HTMLInputElement | null;
+const rateIntervalInputEl = document.getElementById('rate-interval-input') as HTMLInputElement | null;
+const effectiveRateDisplayEl = document.getElementById('effective-rate-display');
+const startSessionBtnEl = document.getElementById('start-session-btn') as HTMLButtonElement | null;
+
 // Session UI elements
 const sessionStatsEl = document.getElementById('session-stats');
 const elapsedTimeEl = document.getElementById('elapsed-time');
@@ -363,10 +370,43 @@ const { privkeyHex: tutorPrivkeyHex, pubkeyHex: tutorPubkeyHex } = getOrGenerate
 console.log('[tutor] pubkey:', tutorPubkeyHex);
 
 // ---------------------------------------------------------------------------
+// Rate configuration helpers
+// ---------------------------------------------------------------------------
+
+/** Read the current configured rate values from the UI inputs. */
+function getRateConfig(): { rateSatsPerInterval: number; intervalSeconds: number } {
+  const sats = Math.max(1, parseInt(rateSatsInputEl?.value ?? '2', 10) || 2);
+  const interval = Math.max(5, parseInt(rateIntervalInputEl?.value ?? '10', 10) || 10);
+  return { rateSatsPerInterval: sats, intervalSeconds: interval };
+}
+
+/** Update the effective-rate display: (sats / interval * 60) sats/min. */
+function updateEffectiveRateDisplay(): void {
+  if (effectiveRateDisplayEl === null) return;
+  const { rateSatsPerInterval, intervalSeconds } = getRateConfig();
+  effectiveRateDisplayEl.textContent = (rateSatsPerInterval / intervalSeconds * 60).toFixed(1);
+}
+
+// Wire up real-time rate display updates
+if (rateSatsInputEl !== null) {
+  rateSatsInputEl.addEventListener('input', updateEffectiveRateDisplay);
+}
+if (rateIntervalInputEl !== null) {
+  rateIntervalInputEl.addEventListener('input', updateEffectiveRateDisplay);
+}
+// Initialise the display with the defaults
+updateEffectiveRateDisplay();
+
+// ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
 let sessionId: string | null = null;
+
+/** Whether the signaling connection is ready for the tutor to create a session. */
+let signalingReady = false;
+/** Whether the tutor has clicked "Start Session". */
+let sessionStartRequested = false;
 let localStream: MediaStream | null = null;
 let dataChannel: DataChannel | null = null;
 const peer = new PeerConnection();
@@ -380,6 +420,19 @@ let lastSeenChunkId = -1;
 
 const client = new SignalingClient(signalingUrl);
 
+/** Send the create_session message using the currently configured rate. */
+function sendCreateSession(): void {
+  const { rateSatsPerInterval, intervalSeconds } = getRateConfig();
+  setStatus('connected -- creating session\u2026');
+  client.send({
+    type: 'create_session',
+    tutorPubkey: tutorPubkeyHex,
+    mintUrl: import.meta.env['VITE_MINT_URL'] as string,
+    rateSatsPerInterval,
+    intervalSeconds,
+  });
+}
+
 client.onConnect(() => {
   hideReconnectOverlay();
   const existing = loadSession();
@@ -391,10 +444,30 @@ client.onConnect(() => {
     setStatus('reconnecting -- rejoining session\u2026');
     client.send({ type: 'rejoin_session', sessionId: existing.sessionId });
   } else {
-    setStatus('connected -- creating session\u2026');
-    client.send({ type: 'create_session', tutorPubkey: tutorPubkeyHex, mintUrl: import.meta.env['VITE_MINT_URL'] as string });
+    // Mark signaling as ready; session is created when the tutor clicks the button.
+    signalingReady = true;
+    setStatus('connected -- configure rate and click Start Session');
+    if (sessionStartRequested) {
+      // Button was clicked before the connection was ready
+      sendCreateSession();
+    }
   }
 });
+
+// "Start Session" button handler
+if (startSessionBtnEl !== null) {
+  startSessionBtnEl.addEventListener('click', () => {
+    if (startSessionBtnEl !== null) {
+      startSessionBtnEl.disabled = true;
+    }
+    sessionStartRequested = true;
+    if (signalingReady) {
+      sendCreateSession();
+    } else {
+      setStatus('connecting\u2026 session will start when ready');
+    }
+  });
+}
 
 client.onDisconnecting(() => {
   showReconnectOverlay();
@@ -593,6 +666,11 @@ function handleSessionCreated(id: string): void {
   sessionId = id;
   console.log('[tutor] session created:', id);
 
+  // Hide the rate config panel now that the session is live
+  if (rateConfigEl !== null) {
+    rateConfigEl.style.display = 'none';
+  }
+
   client.setSessionId(id);
   saveSession({
     sessionId: id,
@@ -610,12 +688,13 @@ function handleSessionCreated(id: string): void {
     sessionContainerEl.style.display = 'block';
   }
 
-  // Build and display the invite
+  // Build and display the invite using the configured rate
+  const { rateSatsPerInterval, intervalSeconds } = getRateConfig();
   const inviteUrl = createInviteUrl({
     sessionId: id,
     tutorPubkey: tutorPubkeyHex,
-    rateSatsPerInterval: 2,
-    intervalSeconds: 10,
+    rateSatsPerInterval,
+    intervalSeconds,
     mintUrl: (import.meta.env['VITE_MINT_URL'] as string | undefined) ?? '',
   });
 
