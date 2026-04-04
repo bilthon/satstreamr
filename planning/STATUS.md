@@ -1,6 +1,6 @@
 # Satstreamr MVP — Progress Tracker
 
-Last updated: 2026-04-04 (Units 13, 16, 18 complete)
+Last updated: 2026-04-04 (All MVP units complete — 13, 16, 18, 20, 21)
 
 ## Legend
 - ✅ Complete
@@ -31,8 +31,8 @@ Last updated: 2026-04-04 (Units 13, 16, 18 complete)
 | 17 | ~~Session Recording~~ | ❌ | Dropped — post-MVP |
 | 18 | Same-Mint Enforcement | ✅ | URL-normalized mint check, MintMismatchError, blocking overlay |
 | 19 | ~~Tutor Invite Flow~~ | ❌ | Dropped — post-MVP |
-| 20 | E2E Integration Test | ⬜ | MVP |
-| 21 | Developer README | ⬜ | MVP |
+| 20 | E2E Integration Test | ✅ | 16 tests: TURN credentials, mintUrl relay, payment-scheduler double-timeout failure |
+| 21 | Developer README | ✅ | Full developer quick-start; pip install cashu==0.19.2 |
 
 ## Go/No-Go Gates
 
