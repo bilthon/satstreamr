@@ -1,6 +1,6 @@
 # Satstreamr MVP — Progress Tracker
 
-Last updated: 2026-03-29
+Last updated: 2026-04-04
 
 ## Legend
 - ✅ Complete
@@ -23,7 +23,7 @@ Last updated: 2026-03-29
 | 09 | WebSocket Reconnect & Session Persistence | ✅ | Merged; exponential backoff, session_rejoined ack, sessionStorage |
 | 10 | Token Transfer over Data Channel | ✅ | Gate 3 — PASSED 2026-03-26; P2PK token delivered over data channel |
 | 11 | Payment Scheduler | ✅ | Gate 4 — PASSED 2026-03-29; ~10s interval, self-scheduling setTimeout |
-| 12 | Session UI | ⬜ | |
+| 12 | Session UI | ✅ | Elapsed timer, budget display, pulse animation, session-end summary overlay |
 | 13 | Coturn + ICE Restart | ⬜ | |
 | 14 | Screen Sharing | ⬜ | |
 | 15 | Browser Detection | ⬜ | |
