@@ -24,15 +24,15 @@ Last updated: 2026-04-04
 | 10 | Token Transfer over Data Channel | ✅ | Gate 3 — PASSED 2026-03-26; P2PK token delivered over data channel |
 | 11 | Payment Scheduler | ✅ | Gate 4 — PASSED 2026-03-29; ~10s interval, self-scheduling setTimeout |
 | 12 | Session UI | ✅ | Elapsed timer, budget display, pulse animation, session-end summary overlay |
-| 13 | Coturn + ICE Restart | ⬜ | |
-| 14 | Screen Sharing | ⬜ | |
-| 15 | Browser Detection | ⬜ | |
-| 16 | Cash-out via Lightning Invoice | ⬜ | |
-| 17 | Session Recording | ⬜ | |
-| 18 | Same-Mint Enforcement | ⬜ | |
-| 19 | Tutor Invite Flow | ⬜ | |
-| 20 | E2E Integration Test | ⬜ | |
-| 21 | Developer README | ⬜ | |
+| 13 | Coturn + ICE Restart | ⬜ | MVP |
+| 14 | ~~Screen Sharing~~ | ❌ | Dropped — post-MVP |
+| 15 | ~~Browser Detection~~ | ❌ | Dropped — post-MVP |
+| 16 | Cash-out via Lightning Invoice | ⬜ | MVP |
+| 17 | ~~Session Recording~~ | ❌ | Dropped — post-MVP |
+| 18 | Same-Mint Enforcement | ⬜ | MVP |
+| 19 | ~~Tutor Invite Flow~~ | ❌ | Dropped — post-MVP |
+| 20 | E2E Integration Test | ⬜ | MVP |
+| 21 | Developer README | ⬜ | MVP |
 
 ## Go/No-Go Gates
 
