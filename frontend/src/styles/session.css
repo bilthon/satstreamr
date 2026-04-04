@@ -75,6 +75,37 @@
 }
 
 /* ------------------------------------------------------------
+   Utility
+   ------------------------------------------------------------ */
+
+.hidden {
+  display: none !important;
+}
+
+/* ------------------------------------------------------------
+   ICE restart banner (amber, full-width, similar to payment-paused)
+   ------------------------------------------------------------ */
+
+.ice-restart-banner {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.75rem 1rem;
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 4px;
+  color: #92400e;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-align: center;
+  margin: 0.5rem 0;
+}
+
+.ice-restart-banner #ice-restart-seconds {
+  font-family: monospace;
+  font-size: 1.1em;
+}
+
+/* ------------------------------------------------------------
    Payment paused banner
    ------------------------------------------------------------ */
 

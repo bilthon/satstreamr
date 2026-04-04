@@ -20,6 +20,8 @@ const remoteVideoEl = document.getElementById('remote-video') as HTMLVideoElemen
 const errorEl = document.getElementById('error');
 const sessionDisplayEl = document.getElementById('session-display');
 const dcStatusEl = document.getElementById('dc-status');
+const iceRestartBannerEl = document.getElementById('ice-restart-countdown');
+const iceRestartSecondsEl = document.getElementById('ice-restart-seconds');
 
 // Session UI elements
 const sessionStatsEl = document.getElementById('session-stats');
@@ -143,6 +145,47 @@ function hidePaymentPausedBanner(): void {
   }
 }
 
+// ---------------------------------------------------------------------------
+// ICE restart countdown banner (viewer side — driven by connectionState)
+// ---------------------------------------------------------------------------
+
+const ICE_RESTART_COUNTDOWN_SECS = 15;
+let iceCountdownHandle: ReturnType<typeof setInterval> | null = null;
+
+function showIceRestartBanner(): void {
+  if (iceRestartBannerEl === null) return;
+  iceRestartBannerEl.classList.remove('hidden');
+
+  let remaining = ICE_RESTART_COUNTDOWN_SECS;
+  if (iceRestartSecondsEl !== null) {
+    iceRestartSecondsEl.textContent = String(remaining);
+  }
+
+  if (iceCountdownHandle !== null) {
+    clearInterval(iceCountdownHandle);
+  }
+
+  iceCountdownHandle = setInterval(() => {
+    remaining -= 1;
+    if (iceRestartSecondsEl !== null) {
+      iceRestartSecondsEl.textContent = String(Math.max(remaining, 0));
+    }
+    if (remaining <= 0) {
+      stopIceRestartBanner();
+    }
+  }, 1_000);
+}
+
+function stopIceRestartBanner(): void {
+  if (iceCountdownHandle !== null) {
+    clearInterval(iceCountdownHandle);
+    iceCountdownHandle = null;
+  }
+  if (iceRestartBannerEl !== null) {
+    iceRestartBannerEl.classList.add('hidden');
+  }
+}
+
 /** Show the session-end summary overlay. */
 function showSessionSummary(): void {
   if (summaryShown) return;
@@ -190,10 +233,55 @@ if (sessionDisplayEl !== null) {
 let localStream: MediaStream | null = null;
 let dataChannel: DataChannel | null = null;
 let scheduler: PaymentScheduler | null = null;
-const peer = new PeerConnection();
+let peer = new PeerConnection();
 
 /** Tutor's compressed secp256k1 pubkey received via signaling. */
 let tutorPubkey: string | null = null;
+
+/** Whether the initial WebRTC negotiation has completed (offer/answer exchanged). */
+let initialNegotiationDone = false;
+
+/**
+ * (Re-)initialise the PeerConnection with the given iceServers and re-wire all
+ * module-level callbacks.  Called once when session_created delivers the
+ * server-side ICE config.
+ */
+function initPeer(iceServers?: RTCIceServer[]): void {
+  peer = new PeerConnection(iceServers);
+
+  peer.onIceCandidate((candidate) => {
+    if (sessionId === null) return;
+    client.send({ type: 'ice_candidate', sessionId, candidate });
+  });
+
+  peer.onIceStateChange = (state) => {
+    setStatus(`ICE connection state: ${state}`);
+  };
+
+  // Monitor connection state to drive ICE restart banner on the viewer side.
+  peer.getPeerConnection().onconnectionstatechange = () => {
+    const state = peer.getPeerConnection().connectionState;
+    if (state === 'disconnected' || state === 'failed') {
+      showIceRestartBanner();
+    } else if (state === 'connected') {
+      stopIceRestartBanner();
+    }
+  };
+
+  peer.onDataChannel = (event) => {
+    wireDataChannel(event);
+  };
+
+  peer.onTrack = (event) => {
+    console.log('[viewer] remote track received:', event.track.kind);
+    if (remoteVideoEl !== null && event.streams[0] !== undefined) {
+      remoteVideoEl.srcObject = event.streams[0];
+    }
+  };
+}
+
+// Initialise with defaults immediately so callbacks work before session_created.
+initPeer();
 
 /** Monotonically increasing chunk counter (used only by DEV manual payment). */
 let nextChunkId = 0;
@@ -310,27 +398,10 @@ client.onReconnected(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Wire up ICE candidate forwarding
-// ---------------------------------------------------------------------------
-
-peer.onIceCandidate((candidate) => {
-  if (sessionId === null) return;
-  client.send({ type: 'ice_candidate', sessionId, candidate });
-});
-
-// ---------------------------------------------------------------------------
-// ICE state display
-// ---------------------------------------------------------------------------
-
-peer.onIceStateChange = (state) => {
-  setStatus(`ICE connection state: ${state}`);
-};
-
-// ---------------------------------------------------------------------------
 // Data channel
 // ---------------------------------------------------------------------------
 
-peer.onDataChannel = (event) => {
+function wireDataChannel(event: RTCDataChannelEvent): void {
   const rawChannel = event.channel;
 
   // ondatachannel fires when the channel is received but it may still be
@@ -414,18 +485,7 @@ peer.onDataChannel = (event) => {
     scheduler?.stop();
     scheduler = null;
   };
-};
-
-// ---------------------------------------------------------------------------
-// Remote track -> remote video
-// ---------------------------------------------------------------------------
-
-peer.onTrack = (event) => {
-  console.log('[viewer] remote track received:', event.track.kind);
-  if (remoteVideoEl !== null && event.streams[0] !== undefined) {
-    remoteVideoEl.srcObject = event.streams[0];
-  }
-};
+}
 
 // ---------------------------------------------------------------------------
 // Message handler
@@ -434,9 +494,11 @@ peer.onTrack = (event) => {
 client.onMessage((msg: SignalingMessage) => {
   switch (msg.type) {
     case 'session_created':
-      // Viewer receives session_created after joining; extract tutorPubkey.
+      // Viewer receives session_created after joining; extract tutorPubkey and
+      // reinitialise peer with the server-provided ICE servers (Unit 13).
       tutorPubkey = msg.tutorPubkey;
       console.log('[viewer] tutorPubkey received:', tutorPubkey);
+      initPeer(msg.iceServers as RTCIceServer[] | undefined);
       break;
 
     case 'viewer_joined':
@@ -489,6 +551,22 @@ async function handleOffer(offer: RTCSessionDescriptionInit): Promise<void> {
     return;
   }
 
+  // If negotiation has already completed this is an ICE restart offer from the
+  // tutor.  Handle it without re-adding tracks or re-acquiring media.
+  if (initialNegotiationDone) {
+    console.log('[viewer] ICE restart offer received');
+    setStatus('ICE restart offer received -- creating answer\u2026');
+    try {
+      const answer = await peer.handleRestartOffer(offer);
+      client.send({ type: 'answer', sessionId, sdp: answer });
+      setStatus('ICE restart answer sent -- waiting for ICE\u2026');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      showError(`Failed to handle ICE restart offer: ${message}`);
+    }
+    return;
+  }
+
   // Wait for local media if not yet available
   if (localStream === null) {
     setStatus('offer received -- waiting for local media\u2026');
@@ -506,6 +584,7 @@ async function handleOffer(offer: RTCSessionDescriptionInit): Promise<void> {
     const answer = await peer.handleOffer(offer, localStream);
     client.send({ type: 'answer', sessionId, sdp: answer });
     setStatus('answer sent -- waiting for ICE\u2026');
+    initialNegotiationDone = true;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     showError(`Failed to handle offer: ${message}`);
