@@ -197,7 +197,61 @@ describe('PaymentScheduler', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Test 3 — Budget exhaustion
+  // Test 3 — Double timeout triggers onPaymentFailure and stops the scheduler
+  // -------------------------------------------------------------------------
+  it('double timeout: onPaymentFailure fires after two 5s timeouts and scheduler stops', async () => {
+    const dc = makeMockDataChannel();
+    const mintToken = makeMockMintToken();
+    const encodeToken = makeMockEncodeToken();
+
+    const failureReasons: string[] = [];
+    const chunksPaid: number[] = [];
+
+    const scheduler = new PaymentScheduler(dc, mintToken, encodeToken, {
+      intervalSecs: INTERVAL_SECS,
+      chunkSats: CHUNK_SATS,
+      budgetSats: 100,
+      tutorPubkey: TUTOR_PUBKEY,
+      mintUrl: MINT_URL,
+    });
+
+    scheduler.onChunkPaid((chunkId) => { chunksPaid.push(chunkId); });
+    scheduler.onPaymentFailure((reason) => { failureReasons.push(reason); });
+
+    scheduler.start();
+
+    // First interval fires — sends the initial token_payment.
+    await vi.advanceTimersByTimeAsync(INTERVAL_SECS * 1000);
+
+    // First ack timeout (5 seconds) — triggers one retry.
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    // At this point one retry should have been sent, still no ack.
+    const paymentsAfterFirstTimeout = dc.sent.filter((m) => m.type === 'token_payment');
+    expect(paymentsAfterFirstTimeout).toHaveLength(2); // original + retry
+
+    // Second ack timeout (another 5 seconds) — should trigger permanent failure.
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    // onPaymentFailure must have fired exactly once.
+    expect(failureReasons).toHaveLength(1);
+    expect(failureReasons[0]).toMatch(/chunk #0/);
+
+    // No chunks should have been paid successfully.
+    expect(chunksPaid).toHaveLength(0);
+
+    // A session_paused message should have been sent over the data channel.
+    const pausedMessages = dc.sent.filter((m) => m.type === 'session_paused');
+    expect(pausedMessages).toHaveLength(1);
+
+    // Scheduler must be stopped — advancing time further should not send more tokens.
+    await vi.advanceTimersByTimeAsync(INTERVAL_SECS * 1000 * 3);
+    const totalPayments = dc.sent.filter((m) => m.type === 'token_payment').length;
+    expect(totalPayments).toBe(2); // still exactly 2 — no further attempts
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 4 — Budget exhaustion
   // -------------------------------------------------------------------------
   it('budget exhaustion: onBudgetExhausted fires after 3 acks, no 4th token is sent', async () => {
     const BUDGET_SATS = 3;
