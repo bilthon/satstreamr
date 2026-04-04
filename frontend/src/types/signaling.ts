@@ -1,3 +1,10 @@
+// ICE server configuration (STUN and TURN)
+export interface IceServer {
+  urls: string;
+  username?: string;
+  credential?: string;
+}
+
 // Inbound message types (client -> server)
 export type InboundMessageType =
   | 'create_session'
@@ -81,12 +88,14 @@ export interface SessionCreatedMessage {
   type: 'session_created';
   sessionId: string;
   tutorPubkey: string;
+  iceServers?: IceServer[];
 }
 
 export interface ViewerJoinedMessage {
   type: 'viewer_joined';
   viewerId: string;
   tutorPubkey: string;
+  iceServers?: IceServer[];
 }
 
 export interface SessionRejoinedMessage {
