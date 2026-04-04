@@ -1,6 +1,6 @@
 # Satstreamr MVP — Progress Tracker
 
-Last updated: 2026-04-04 (Units 13, 16 complete)
+Last updated: 2026-04-04 (Units 13, 16, 18 complete)
 
 ## Legend
 - ✅ Complete
@@ -29,7 +29,7 @@ Last updated: 2026-04-04 (Units 13, 16 complete)
 | 15 | ~~Browser Detection~~ | ❌ | Dropped — post-MVP |
 | 16 | Cash-out via Lightning Invoice | ✅ | getMeltQuote + meltTokens, proof persistence, 600s countdown UI |
 | 17 | ~~Session Recording~~ | ❌ | Dropped — post-MVP |
-| 18 | Same-Mint Enforcement | ⬜ | MVP |
+| 18 | Same-Mint Enforcement | ✅ | URL-normalized mint check, MintMismatchError, blocking overlay |
 | 19 | ~~Tutor Invite Flow~~ | ❌ | Dropped — post-MVP |
 | 20 | E2E Integration Test | ⬜ | MVP |
 | 21 | Developer README | ⬜ | MVP |
