@@ -518,9 +518,10 @@ async function handleTokenPayment(chunkId: number, encodedToken: string): Promis
     console.log(`[payment] ack #${chunkId}`);
     dataChannel.sendMessage({ type: 'payment_ack', chunkId });
 
-    // Update the sats-received counter (each chunk carries chunkSats — read from
-    // the decoded proofs total rather than hardcoding the chunk size).
-    const chunkSats = (proofs as Proof[]).reduce((sum: number, p: Proof) => sum + p.amount, 0);
+    // Update the sats-received counter using the post-redemption proof amounts
+    // (i.e. after the mint has deducted its swap fee), so the displayed total
+    // reflects what the tutor actually holds.
+    const chunkSats = newProofs.reduce((sum: number, p: Proof) => sum + p.amount, 0);
     updateSatsReceived(chunkSats);
 
     // Persist the newly redeemed proofs so they are available for cash-out.
