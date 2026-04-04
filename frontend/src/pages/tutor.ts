@@ -385,7 +385,7 @@ client.onConnect(() => {
     client.send({ type: 'rejoin_session', sessionId: existing.sessionId });
   } else {
     setStatus('connected -- creating session\u2026');
-    client.send({ type: 'create_session', tutorPubkey: tutorPubkeyHex });
+    client.send({ type: 'create_session', tutorPubkey: tutorPubkeyHex, mintUrl: import.meta.env['VITE_MINT_URL'] as string });
   }
 });
 
