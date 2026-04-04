@@ -7,7 +7,8 @@ import { PeerConnection } from '../lib/peer-connection.js';
 import { DataChannel } from '../lib/data-channel.js';
 import { checkTokenState, redeemToken, getMeltQuote, meltTokens } from '../lib/cashu-wallet.js';
 import type { SignalingMessage } from '../types/signaling.js';
-import { saveSession, loadSession, clearSession, updateSession } from '../lib/session-storage.js';
+import { saveSession, loadSession, clearSession } from '../lib/session-storage.js';
+import { getProofs, addProofs } from '../lib/wallet-store.js';
 
 const signalingUrl = (import.meta.env['VITE_SIGNALING_URL'] as string | undefined) ?? 'ws://localhost:8080';
 
@@ -230,9 +231,8 @@ function validInvoicePrefix(): string {
 function wireCashOut(): void {
   if (invoiceInputEl === null || payInvoiceBtnEl === null) return;
 
-  // Load accumulated proofs from session storage
-  const session = loadSession();
-  const accumulatedProofs: Proof[] = session?.accumulatedProofs ?? [];
+  // Load accumulated proofs from the persistent wallet store
+  const accumulatedProofs: Proof[] = getProofs();
 
   // Invoice input: validate prefix and start countdown on paste/input
   invoiceInputEl.addEventListener('input', () => {
@@ -524,10 +524,8 @@ async function handleTokenPayment(chunkId: number, encodedToken: string): Promis
     const chunkSats = newProofs.reduce((sum: number, p: Proof) => sum + p.amount, 0);
     updateSatsReceived(chunkSats);
 
-    // Persist the newly redeemed proofs so they are available for cash-out.
-    const existingSession = loadSession();
-    const existingProofs: Proof[] = existingSession?.accumulatedProofs ?? [];
-    updateSession({ accumulatedProofs: [...existingProofs, ...newProofs] });
+    // Persist the newly redeemed proofs to the wallet store for cash-out.
+    addProofs(newProofs);
 
     // If the payment was previously paused and a new chunk just succeeded, hide the banner.
     hidePaymentPausedBanner();
@@ -596,7 +594,6 @@ function handleSessionCreated(id: string): void {
     chunkCount: 0,
     totalSatsPaid: 0,
     budgetRemaining: 0,
-    accumulatedProofs: [],
   });
 
   if (sessionIdEl !== null) {

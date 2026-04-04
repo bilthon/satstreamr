@@ -16,6 +16,7 @@
 
 import type { DataChannel } from './data-channel.js';
 import type { Proof } from '../types/cashu.js';
+import { getBalance } from './wallet-store.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -27,7 +28,8 @@ export type EncodeTokenFn = (proofs: Proof[], mintUrl: string) => string;
 export interface PaymentSchedulerOpts {
   intervalSecs: number;
   chunkSats: number;
-  budgetSats: number;
+  /** Budget in sats. If omitted, defaults to the current wallet-store balance. */
+  budgetSats?: number;
   tutorPubkey: string;
   mintUrl: string;
   /** Initial chunkId — caller loads this from session storage. */
@@ -92,8 +94,10 @@ export class PaymentScheduler {
     this.encodeToken = encodeTokenFn;
 
     // Apply defaults for optional fields
+    const resolvedBudget = opts.budgetSats ?? getBalance();
     this.opts = {
       ...opts,
+      budgetSats: resolvedBudget,
       initialChunkId: opts.initialChunkId ?? 0,
       initialTotalSatsPaid: opts.initialTotalSatsPaid ?? 0,
       onStateChange: opts.onStateChange ?? (() => undefined),
@@ -101,7 +105,7 @@ export class PaymentScheduler {
 
     this.chunkId = this.opts.initialChunkId;
     this.totalSatsPaid = this.opts.initialTotalSatsPaid;
-    this.budgetRemaining = opts.budgetSats;
+    this.budgetRemaining = resolvedBudget;
 
     // Wire up incoming ack/nack handler
     this.dc.onMessage((msg) => {
