@@ -49,7 +49,7 @@ function getMintUrl(): string {
 }
 
 /** Builds a connected, key-loaded CashuWallet for the sat unit. */
-async function buildWallet(): Promise<{
+export async function buildWallet(): Promise<{
   wallet: CashuWallet;
   mintKeys: MintKeys;
   feePpk: number;
