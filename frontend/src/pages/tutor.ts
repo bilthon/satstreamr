@@ -393,7 +393,7 @@ let signalingReady = false;
 let sessionStartRequested = false;
 let localStream: MediaStream | null = null;
 let dataChannel: DataChannel | null = null;
-const peer = new PeerConnection();
+let peer = new PeerConnection();
 
 /** Last chunkId successfully processed. Starts at -1 so first chunkId=0 is valid. */
 let lastSeenChunkId = -1;
@@ -478,71 +478,78 @@ client.onReconnected(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Wire up ICE candidate forwarding
+// Peer event handler wiring
 // ---------------------------------------------------------------------------
 
-peer.onIceCandidate((candidate) => {
-  if (sessionId === null) {
-    console.warn('[tutor] ICE candidate arrived but no sessionId yet -- dropping');
-    return;
-  }
-  client.send({ type: 'ice_candidate', sessionId, candidate });
-});
+function setupPeerHandlers(): void {
+  // Wire up ICE candidate forwarding
+  peer.onIceCandidate((candidate) => {
+    if (sessionId === null) {
+      console.warn('[tutor] ICE candidate arrived but no sessionId yet -- dropping');
+      return;
+    }
+    client.send({ type: 'ice_candidate', sessionId, candidate });
+  });
 
-// ---------------------------------------------------------------------------
-// ICE state display
-// ---------------------------------------------------------------------------
-
-peer.onIceStateChange = (state) => {
-  setStatus(`ICE connection state: ${state}`);
-};
-
-// ---------------------------------------------------------------------------
-// Data channel -- token receipt, verify, ack/nack (Unit 10)
-// ---------------------------------------------------------------------------
-
-peer.onDataChannel = (event) => {
-  dataChannel = new DataChannel(event.channel);
-  console.log('[datachannel] open');
-  setDcStatus('open');
-
-  // Start the elapsed timer now that the data channel is open
-  startElapsedTimer();
-  showSessionStats();
-  hidePaymentPausedBanner();
-
-  event.channel.onclose = () => {
-    console.log('[datachannel] closed');
-    setDcStatus('closed');
-    stopElapsedTimer();
+  // ICE state display
+  peer.onIceStateChange = (state) => {
+    setStatus(`ICE connection state: ${state}`);
   };
 
-  dataChannel.onMessage((msg) => {
-    if (msg.type === 'session_paused') {
-      // Viewer signaled that payment was paused
-      showPaymentPausedBanner();
-      return;
+  // Data channel -- token receipt, verify, ack/nack (Unit 10)
+  peer.onDataChannel = (event) => {
+    dataChannel = new DataChannel(event.channel);
+    console.log('[datachannel] open');
+    setDcStatus('open');
+
+    // Start the elapsed timer now that the data channel is open
+    startElapsedTimer();
+    showSessionStats();
+    hidePaymentPausedBanner();
+
+    event.channel.onclose = () => {
+      console.log('[datachannel] closed');
+      setDcStatus('closed');
+      stopElapsedTimer();
+    };
+
+    dataChannel.onMessage((msg) => {
+      if (msg.type === 'session_paused') {
+        // Viewer signaled that payment was paused
+        showPaymentPausedBanner();
+        return;
+      }
+
+      if (msg.type !== 'token_payment') {
+        console.log('[tutor] data channel message received:', msg);
+        return;
+      }
+
+      const { chunkId, encodedToken } = msg;
+
+      // Validate chunkId is strictly greater than last seen
+      if (chunkId <= lastSeenChunkId) {
+        console.warn(
+          `[payment] duplicate/out-of-order chunk #${chunkId} (last seen: ${lastSeenChunkId}) -- nack`,
+        );
+        dataChannel?.sendMessage({ type: 'payment_nack', chunkId, reason: 'duplicate_chunk_id' });
+        return;
+      }
+
+      void handleTokenPayment(chunkId, encodedToken);
+    });
+  };
+
+  // Remote track -> remote video
+  peer.onTrack = (event) => {
+    const remoteVideoEl = document.getElementById('remote-video') as HTMLVideoElement | null;
+    if (remoteVideoEl !== null && event.streams[0] !== undefined) {
+      remoteVideoEl.srcObject = event.streams[0];
     }
+  };
+}
 
-    if (msg.type !== 'token_payment') {
-      console.log('[tutor] data channel message received:', msg);
-      return;
-    }
-
-    const { chunkId, encodedToken } = msg;
-
-    // Validate chunkId is strictly greater than last seen
-    if (chunkId <= lastSeenChunkId) {
-      console.warn(
-        `[payment] duplicate/out-of-order chunk #${chunkId} (last seen: ${lastSeenChunkId}) -- nack`,
-      );
-      dataChannel?.sendMessage({ type: 'payment_nack', chunkId, reason: 'duplicate_chunk_id' });
-      return;
-    }
-
-    void handleTokenPayment(chunkId, encodedToken);
-  });
-};
+setupPeerHandlers();
 
 async function handleTokenPayment(chunkId: number, encodedToken: string): Promise<void> {
   if (dataChannel === null) return;
@@ -598,17 +605,6 @@ async function handleTokenPayment(chunkId: number, encodedToken: string): Promis
     dataChannel.sendMessage({ type: 'payment_nack', chunkId, reason });
   }
 }
-
-// ---------------------------------------------------------------------------
-// Remote track -> remote video
-// ---------------------------------------------------------------------------
-
-peer.onTrack = (event) => {
-  const remoteVideoEl = document.getElementById('remote-video') as HTMLVideoElement | null;
-  if (remoteVideoEl !== null && event.streams[0] !== undefined) {
-    remoteVideoEl.srcObject = event.streams[0];
-  }
-};
 
 // ---------------------------------------------------------------------------
 // Message handler
@@ -752,6 +748,15 @@ async function handleViewerJoined(): Promise<void> {
   }
 
   setStatus('viewer joined -- creating offer\u2026');
+
+  // Close the stale peer connection and create a fresh one so that addTrack
+  // does not throw "A sender already exists for the track" when a viewer
+  // leaves and rejoins.
+  peer.close();
+  peer = new PeerConnection();
+  setupPeerHandlers();
+  lastSeenChunkId = -1;
+  dataChannel = null;
 
   try {
     // Create the payment data channel BEFORE createOffer() so it is negotiated
