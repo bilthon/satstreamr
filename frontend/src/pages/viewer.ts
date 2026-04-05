@@ -256,7 +256,7 @@ try {
 let localStream: MediaStream | null = null;
 let dataChannel: DataChannel | null = null;
 let scheduler: PaymentScheduler | null = null;
-const peer = new PeerConnection();
+let peer = new PeerConnection();
 
 /** Monotonically increasing chunk counter (used only by DEV manual payment). */
 let nextChunkId = 0;
@@ -376,133 +376,129 @@ client.onReconnected(() => {
 });
 
 // ---------------------------------------------------------------------------
-// Wire up ICE candidate forwarding
+// Peer handler setup (extracted so it can be re-applied after renegotiation)
 // ---------------------------------------------------------------------------
 
-peer.onIceCandidate((candidate) => {
-  if (sessionId === null) return;
-  client.send({ type: 'ice_candidate', sessionId, candidate });
-});
+function setupPeerHandlers(): void {
+  // Wire up ICE candidate forwarding
+  peer.onIceCandidate((candidate) => {
+    if (sessionId === null) return;
+    client.send({ type: 'ice_candidate', sessionId, candidate });
+  });
 
-// ---------------------------------------------------------------------------
-// ICE state display
-// ---------------------------------------------------------------------------
+  // ICE state display
+  peer.onIceStateChange = (state) => {
+    setStatus(`ICE connection state: ${state}`);
+  };
 
-peer.onIceStateChange = (state) => {
-  setStatus(`ICE connection state: ${state}`);
-};
+  // Data channel
+  peer.onDataChannel = (event) => {
+    const rawChannel = event.channel;
 
-// ---------------------------------------------------------------------------
-// Data channel
-// ---------------------------------------------------------------------------
+    // Holds the unsubscribe function for the balance listener; set in onopen,
+    // called in onclose so the subscription does not outlive the channel.
+    let unsubscribeBalance: (() => void) | null = null;
 
-peer.onDataChannel = (event) => {
-  const rawChannel = event.channel;
+    // ondatachannel fires when the channel is received but it may still be
+    // in 'connecting' state. Wait for 'open' before marking ready.
+    rawChannel.onopen = () => {
+      dataChannel = new DataChannel(rawChannel);
+      console.log('[datachannel] open');
+      setDcStatus('open');
 
-  // Holds the unsubscribe function for the balance listener; set in onopen,
-  // called in onclose so the subscription does not outlive the channel.
-  let unsubscribeBalance: (() => void) | null = null;
+      // Load persisted state so the scheduler survives page reloads.
+      const session = loadSession();
+      const initialChunkId = session?.chunkCount ?? 0;
+      const initialTotalSatsPaid = session?.totalSatsPaid ?? 0;
 
-  // ondatachannel fires when the channel is received but it may still be
-  // in 'connecting' state. Wait for 'open' before marking ready.
-  rawChannel.onopen = () => {
-    dataChannel = new DataChannel(rawChannel);
-    console.log('[datachannel] open');
-    setDcStatus('open');
+      // Sync nextChunkId for the DEV manual payment button.
+      nextChunkId = initialChunkId;
 
-    // Load persisted state so the scheduler survives page reloads.
-    const session = loadSession();
-    const initialChunkId = session?.chunkCount ?? 0;
-    const initialTotalSatsPaid = session?.totalSatsPaid ?? 0;
-
-    // Sync nextChunkId for the DEV manual payment button.
-    nextChunkId = initialChunkId;
-
-    // Show the session stats bar with the current wallet balance.
-    totalSatsPaidDisplay = initialTotalSatsPaid;
-    totalChunksPaidDisplay = initialChunkId;
-    showSessionStats(getBalance());
-    hidePaymentPausedBanner();
-
-    // Subscribe to wallet balance changes for reactive budget display.
-    unsubscribeBalance = onBalanceChange((balance) => {
-      updateBudgetDisplay(balance);
-    });
-
-    scheduler = new PaymentScheduler(
-      dataChannel,
-      spendProofs,
-      (proofs, url) =>
-        getEncodedToken({ mint: url, proofs, unit: 'sat' }),
-      {
-        intervalSecs: activeIntervalSeconds,
-        chunkSats: activeRateSatsPerInterval,
-        mintUrl,
-        initialChunkId,
-        initialTotalSatsPaid,
-        onStateChange: (state) => {
-          updateSession({
-            chunkCount: state.chunkId,
-            totalSatsPaid: state.totalSatsPaid,
-          });
-        },
-      },
-    );
-
-    scheduler.onBudgetExhausted(() => {
-      showError('Budget exhausted \u2014 session ended');
-      scheduler.stop();
-      peer.close();
-      if (localStream !== null) {
-        localStream.getTracks().forEach(t => t.stop());
-      }
-      showSessionSummary();
-      client.disconnect();
-    });
-
-    scheduler.onPaymentFailure((reason) => {
-      showError(`Payment failed \u2014 session paused: ${reason}`);
-      showPaymentPausedBanner();
-    });
-
-    scheduler.onChunkPaid((chunkId, totalPaid, balance) => {
-      console.log(
-        `[scheduler] chunk #${chunkId} paid — total: ${totalPaid} sats, balance: ${balance} sats`,
-      );
-      totalSatsPaidDisplay = totalPaid;
-      totalChunksPaidDisplay = chunkId + 1;
-      // Balance display is updated reactively via onBalanceChange subscription;
-      // call updateBudgetDisplay here as a synchronous fallback.
-      updateBudgetDisplay(balance);
-      triggerChunkPulse();
+      // Show the session stats bar with the current wallet balance.
+      totalSatsPaidDisplay = initialTotalSatsPaid;
+      totalChunksPaidDisplay = initialChunkId;
+      showSessionStats(getBalance());
       hidePaymentPausedBanner();
-    });
 
-    scheduler.start();
+      // Subscribe to wallet balance changes for reactive budget display.
+      unsubscribeBalance = onBalanceChange((balance) => {
+        updateBudgetDisplay(balance);
+      });
+
+      scheduler = new PaymentScheduler(
+        dataChannel,
+        spendProofs,
+        (proofs, url) =>
+          getEncodedToken({ mint: url, proofs, unit: 'sat' }),
+        {
+          intervalSecs: activeIntervalSeconds,
+          chunkSats: activeRateSatsPerInterval,
+          mintUrl,
+          initialChunkId,
+          initialTotalSatsPaid,
+          onStateChange: (state) => {
+            updateSession({
+              chunkCount: state.chunkId,
+              totalSatsPaid: state.totalSatsPaid,
+            });
+          },
+        },
+      );
+
+      scheduler.onBudgetExhausted(() => {
+        showError('Budget exhausted \u2014 session ended');
+        scheduler.stop();
+        peer.close();
+        if (localStream !== null) {
+          localStream.getTracks().forEach(t => t.stop());
+        }
+        showSessionSummary();
+        client.disconnect();
+      });
+
+      scheduler.onPaymentFailure((reason) => {
+        showError(`Payment failed \u2014 session paused: ${reason}`);
+        showPaymentPausedBanner();
+      });
+
+      scheduler.onChunkPaid((chunkId, totalPaid, balance) => {
+        console.log(
+          `[scheduler] chunk #${chunkId} paid — total: ${totalPaid} sats, balance: ${balance} sats`,
+        );
+        totalSatsPaidDisplay = totalPaid;
+        totalChunksPaidDisplay = chunkId + 1;
+        // Balance display is updated reactively via onBalanceChange subscription;
+        // call updateBudgetDisplay here as a synchronous fallback.
+        updateBudgetDisplay(balance);
+        triggerChunkPulse();
+        hidePaymentPausedBanner();
+      });
+
+      scheduler.start();
+    };
+
+    rawChannel.onclose = () => {
+      console.log('[datachannel] closed');
+      setDcStatus('closed');
+      if (unsubscribeBalance !== null) {
+        unsubscribeBalance();
+        unsubscribeBalance = null;
+      }
+      scheduler?.stop();
+      scheduler = null;
+    };
   };
 
-  rawChannel.onclose = () => {
-    console.log('[datachannel] closed');
-    setDcStatus('closed');
-    if (unsubscribeBalance !== null) {
-      unsubscribeBalance();
-      unsubscribeBalance = null;
+  // Remote track -> remote video
+  peer.onTrack = (event) => {
+    console.log('[viewer] remote track received:', event.track.kind);
+    if (remoteVideoEl !== null && event.streams[0] !== undefined) {
+      remoteVideoEl.srcObject = event.streams[0];
     }
-    scheduler?.stop();
-    scheduler = null;
   };
-};
+}
 
-// ---------------------------------------------------------------------------
-// Remote track -> remote video
-// ---------------------------------------------------------------------------
-
-peer.onTrack = (event) => {
-  console.log('[viewer] remote track received:', event.track.kind);
-  if (remoteVideoEl !== null && event.streams[0] !== undefined) {
-    remoteVideoEl.srcObject = event.streams[0];
-  }
-};
+setupPeerHandlers();
 
 // ---------------------------------------------------------------------------
 // Message handler
@@ -606,6 +602,15 @@ async function handleOffer(offer: RTCSessionDescriptionInit): Promise<void> {
   }
 
   setStatus('offer received -- creating answer\u2026');
+
+  // Recreate peer connection for renegotiation (tutor may have reconnected).
+  peer.close();
+  peer = new PeerConnection();
+  setupPeerHandlers();
+
+  scheduler?.stop();
+  scheduler = null;
+  dataChannel = null;
 
   try {
     const answer = await peer.handleOffer(offer, localStream);
