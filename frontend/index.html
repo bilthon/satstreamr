@@ -63,6 +63,85 @@
         color: #fff;
       }
 
+      /* ---- Token denomination breakdown ---- */
+      #token-details-wrapper {
+        margin-bottom: 2rem;
+      }
+
+      #token-details-toggle {
+        background: none;
+        border: none;
+        padding: 0;
+        font-size: 0.82rem;
+        color: #6b7280;
+        text-decoration: underline;
+        cursor: pointer;
+        display: block;
+        margin-bottom: 0.5rem;
+      }
+
+      #token-details-toggle:hover {
+        color: #374151;
+      }
+
+      #token-details-panel {
+        display: none;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        padding: 0.9rem 1rem;
+      }
+
+      #token-details-panel.is-open {
+        display: block;
+      }
+
+      #token-details-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: monospace;
+        font-size: 0.85rem;
+        margin-bottom: 0.75rem;
+      }
+
+      #token-details-table th {
+        text-align: left;
+        color: #6b7280;
+        font-weight: 600;
+        font-size: 0.78rem;
+        padding: 0.2rem 0.5rem 0.4rem;
+        border-bottom: 1px solid #e5e7eb;
+      }
+
+      #token-details-table th:nth-child(2),
+      #token-details-table th:nth-child(3) {
+        text-align: right;
+      }
+
+      #token-details-table td {
+        padding: 0.25rem 0.5rem;
+        vertical-align: middle;
+      }
+
+      #token-details-table td:nth-child(2),
+      #token-details-table td:nth-child(3) {
+        text-align: right;
+      }
+
+      #token-details-table tbody tr:hover {
+        background: #f3f4f6;
+      }
+
+      #token-details-summary {
+        font-family: monospace;
+        font-size: 0.85rem;
+        font-weight: bold;
+        color: #1a1a2e;
+        border-top: 1px solid #d1d5db;
+        padding-top: 0.5rem;
+        margin-top: 0.25rem;
+      }
+
       /* ---- Section cards ---- */
       .section-card {
         border: 1px solid #e5e7eb;
@@ -492,6 +571,20 @@
       <span id="balance-display">Balance: — sats</span>
       <button class="wallet-btn" id="deposit-btn" type="button">Deposit</button>
       <button class="wallet-btn" id="withdraw-btn" type="button">Withdraw</button>
+    </div>
+
+    <!-- Token denomination breakdown (collapsible) -->
+    <div id="token-details-wrapper">
+      <button id="token-details-toggle" type="button">Show token details</button>
+      <div id="token-details-panel">
+        <table id="token-details-table">
+          <thead>
+            <tr><th>Denomination</th><th>Count</th><th>Subtotal</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div id="token-details-summary"></div>
+      </div>
     </div>
 
     <!-- Withdraw panel (hidden by default, toggled by Withdraw button) -->
