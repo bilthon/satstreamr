@@ -1,5 +1,5 @@
 import QRCode from 'qrcode';
-import { getBalance, onBalanceChange, spendProofs, addProofs } from '../lib/wallet-store.js';
+import { getBalance, onBalanceChange, spendProofs, addProofs, getProofs } from '../lib/wallet-store.js';
 import { getMeltQuote, meltTokens } from '../lib/cashu-wallet.js';
 import { requestMintQuote, pollForPayment, mintProofsFromQuote } from '../lib/deposit.js';
 import { parseInvite } from '../lib/session-invite.js';
@@ -33,6 +33,12 @@ const inviteJsonEl = document.getElementById('invite-json');
 const inviteDecodeErrorEl = document.getElementById('invite-decode-error');
 const inviteJoinBtnEl = document.getElementById('invite-join-btn') as HTMLButtonElement | null;
 
+// Token details elements
+const tokenDetailsToggleEl = document.getElementById('token-details-toggle') as HTMLButtonElement | null;
+const tokenDetailsPanelEl = document.getElementById('token-details-panel');
+const tokenDetailsTableEl = document.getElementById('token-details-table');
+const tokenDetailsSummaryEl = document.getElementById('token-details-summary');
+
 // ---------------------------------------------------------------------------
 // Balance display
 // ---------------------------------------------------------------------------
@@ -49,7 +55,64 @@ renderBalance(getBalance());
 // Subscribe to reactive balance updates.
 onBalanceChange((balance) => {
   renderBalance(balance);
+  // Keep token details in sync while the panel is open.
+  if (tokenDetailsPanelEl !== null && tokenDetailsPanelEl.classList.contains('is-open')) {
+    renderTokenDetails();
+  }
 });
+
+// ---------------------------------------------------------------------------
+// Token denomination breakdown
+// ---------------------------------------------------------------------------
+
+function renderTokenDetails(): void {
+  const proofs = getProofs();
+
+  if (tokenDetailsTableEl === null || tokenDetailsSummaryEl === null) return;
+
+  const tbody = tokenDetailsTableEl.querySelector('tbody');
+  if (tbody === null) return;
+
+  if (proofs.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="3" style="color:#6b7280;font-style:italic;padding:0.4rem 0.5rem;">No tokens in wallet</td></tr>`;
+    tokenDetailsSummaryEl.textContent = '';
+    return;
+  }
+
+  // Group proofs by denomination.
+  const groups = new Map<number, number>();
+  for (const proof of proofs) {
+    groups.set(proof.amount, (groups.get(proof.amount) ?? 0) + 1);
+  }
+
+  // Sort ascending by denomination.
+  const sorted = [...groups.entries()].sort((a, b) => a[0] - b[0]);
+
+  tbody.innerHTML = sorted
+    .map(([denom, count]) => {
+      const subtotal = denom * count;
+      return `<tr>
+        <td>${denom} sat${denom === 1 ? '' : 's'}</td>
+        <td>${count}</td>
+        <td>${subtotal} sat${subtotal === 1 ? '' : 's'}</td>
+      </tr>`;
+    })
+    .join('');
+
+  const totalSats = proofs.reduce((sum, p) => sum + p.amount, 0);
+  tokenDetailsSummaryEl.textContent = `Total: ${totalSats} sat${totalSats === 1 ? '' : 's'} (${proofs.length} proof${proofs.length === 1 ? '' : 's'})`;
+}
+
+// Wire up toggle button.
+if (tokenDetailsToggleEl !== null && tokenDetailsPanelEl !== null) {
+  tokenDetailsToggleEl.addEventListener('click', () => {
+    const isOpen = tokenDetailsPanelEl.classList.toggle('is-open');
+    tokenDetailsToggleEl.textContent = isOpen ? 'Hide token details' : 'Show token details';
+    if (isOpen) {
+      renderTokenDetails();
+    }
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Deposit modal — Unit 25
