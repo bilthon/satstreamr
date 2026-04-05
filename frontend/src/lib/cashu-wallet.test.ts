@@ -131,7 +131,7 @@ describe('preSplitProofs', () => {
 
   it('throws when totalBudget is less than one chunkSats', async () => {
     await expect(preSplitProofs(10, 5)).rejects.toThrow(
-      'Insufficient balance for even one payment chunk'
+      /Insufficient balance after fees/
     );
   });
 
@@ -161,26 +161,35 @@ describe('preSplitProofs', () => {
     expect(addProofs).toHaveBeenCalledWith(inputProofs);
   });
 
-  it('re-selects proofs with fee buffer when initial selection is insufficient', async () => {
+  it('reduces chunk count to account for swap fee', async () => {
     const chunkSats = 2;
-    const totalBudget = 10; // 5 chunks, 10 sats total
-    const smallProofs = [makeProof(10)]; // first selection
-    const biggerProofs = [makeProof(11)]; // re-selection with fee buffer
-    const sendProofs = Array.from({ length: 5 }, (_, i) => makeProof(2, `s${i}`));
+    const totalBudget = 10; // fee=1 => spendable=9 => numChunks=floor(9/2)=4
+    const inputProofs = [makeProof(10)];
+    // 4 chunks of 2 sats each
+    const sendProofs = Array.from({ length: 4 }, (_, i) => makeProof(2, `s${i}`));
 
     mockGetFeesForProofs.mockReturnValue(1); // fee of 1 sat
-    vi.mocked(spendProofs)
-      .mockReturnValueOnce(smallProofs)  // initial selection: 10 sats, but need 10+1=11
-      .mockReturnValueOnce(biggerProofs); // re-selection with fee included
-
+    vi.mocked(spendProofs).mockReturnValue(inputProofs);
     mockSwap.mockResolvedValue({ send: sendProofs, keep: [] });
 
     const result = await preSplitProofs(chunkSats, totalBudget);
 
-    expect(result).toBe(5);
-    // Should have returned undersized selection and re-selected with fee
-    expect(addProofs).toHaveBeenCalledWith(smallProofs);
-    expect(spendProofs).toHaveBeenNthCalledWith(2, 11); // totalAmount + fee = 10 + 1
+    // numChunks = floor((10 - 1) / 2) = 4
+    expect(result).toBe(4);
+    // spendProofs called exactly once with totalAmount + fee = 4*2 + 1 = 9
+    expect(spendProofs).toHaveBeenCalledTimes(1);
+    expect(spendProofs).toHaveBeenCalledWith(9);
+    // swap called once with the reduced totalAmount
+    expect(mockSwap).toHaveBeenCalledTimes(1);
+    expect(mockSwap).toHaveBeenCalledWith(
+      8, // 4 chunks * 2 sats
+      inputProofs,
+      expect.objectContaining({
+        outputAmounts: {
+          sendAmounts: Array(4).fill(2),
+        },
+      })
+    );
   });
 });
 
