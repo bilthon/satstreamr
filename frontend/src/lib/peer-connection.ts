@@ -168,6 +168,16 @@ export class PeerConnection {
     return this.pc;
   }
 
+  /**
+   * Closes the underlying RTCPeerConnection, stopping all media transmission.
+   * Call this whenever the session ends to ensure remote tracks are torn down
+   * and cannot be accessed by removing UI overlays via developer tools.
+   */
+  close(): void {
+    this.pc.close();
+    console.log('[peer] connection closed');
+  }
+
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------

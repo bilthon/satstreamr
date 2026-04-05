@@ -451,6 +451,11 @@ peer.onDataChannel = (event) => {
 
     scheduler.onBudgetExhausted(() => {
       showError('Budget exhausted \u2014 session ended');
+      scheduler.stop();
+      peer.close();
+      if (localStream !== null) {
+        localStream.getTracks().forEach(t => t.stop());
+      }
       showSessionSummary();
       client.disconnect();
     });
@@ -553,6 +558,11 @@ client.onMessage((msg: SignalingMessage) => {
       break;
 
     case 'end_session':
+      scheduler?.stop();
+      peer.close();
+      if (localStream !== null) {
+        localStream.getTracks().forEach(t => t.stop());
+      }
       showSessionSummary();
       break;
 
