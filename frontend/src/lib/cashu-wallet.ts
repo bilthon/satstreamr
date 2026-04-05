@@ -100,8 +100,7 @@ export async function preSplitProofs(
   const totalAmount = numChunks * chunkSats;
 
   // Check if we already have enough exact-denomination proofs.
-  const existing = getProofs();
-  const exactMatch = existing.filter((p) => p.amount === chunkSats);
+  const exactMatch = allProofs.filter((p) => p.amount === chunkSats);
   if (exactMatch.length >= numChunks) {
     return numChunks; // Already pre-split, skip the swap.
   }
