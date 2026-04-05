@@ -633,6 +633,10 @@ client.onMessage((msg: SignalingMessage) => {
       break;
 
     case 'end_session':
+      peer.close();
+      if (localStream !== null) {
+        localStream.getTracks().forEach(t => t.stop());
+      }
       showSessionSummary();
       break;
 
