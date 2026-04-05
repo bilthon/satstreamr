@@ -7,7 +7,6 @@
 
 export interface InvitePayload {
   sessionId: string;
-  tutorPubkey: string;
   rateSatsPerInterval: number;
   intervalSeconds: number;
   mintUrl: string;
@@ -47,7 +46,6 @@ export function parseInvite(encoded: string): InvitePayload | null {
 
     if (
       typeof obj['sessionId'] !== 'string' ||
-      typeof obj['tutorPubkey'] !== 'string' ||
       typeof obj['rateSatsPerInterval'] !== 'number' ||
       typeof obj['intervalSeconds'] !== 'number' ||
       typeof obj['mintUrl'] !== 'string'
@@ -57,7 +55,6 @@ export function parseInvite(encoded: string): InvitePayload | null {
 
     return {
       sessionId: obj['sessionId'],
-      tutorPubkey: obj['tutorPubkey'],
       rateSatsPerInterval: obj['rateSatsPerInterval'],
       intervalSeconds: obj['intervalSeconds'],
       mintUrl: obj['mintUrl'],

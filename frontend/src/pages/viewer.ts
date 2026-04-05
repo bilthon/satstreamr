@@ -2,12 +2,12 @@ import { getEncodedToken } from '@cashu/cashu-ts';
 import { SignalingClient } from '../signaling-client.js';
 import { PeerConnection } from '../lib/peer-connection.js';
 import { DataChannel } from '../lib/data-channel.js';
-import { swapP2PKToken } from '../lib/cashu-wallet.js';
+import { preSplitProofs } from '../lib/cashu-wallet.js';
 import { PaymentScheduler } from '../lib/payment-scheduler.js';
 import type { SignalingMessage } from '../types/signaling.js';
 import { saveSession, loadSession, updateSession, clearSession } from '../lib/session-storage.js';
 import { assertSameMint, MintMismatchError } from '../lib/mint-guard.js';
-import { getBalance, onBalanceChange } from '../lib/wallet-store.js';
+import { getBalance, onBalanceChange, spendProofs } from '../lib/wallet-store.js';
 import { getMintUrl } from '../lib/config.js';
 
 // Derive the signaling WebSocket URL. If VITE_SIGNALING_URL is set at build
@@ -258,9 +258,6 @@ let dataChannel: DataChannel | null = null;
 let scheduler: PaymentScheduler | null = null;
 const peer = new PeerConnection();
 
-/** Tutor's compressed secp256k1 pubkey received via signaling. */
-let tutorPubkey: string | null = null;
-
 /** Monotonically increasing chunk counter (used only by DEV manual payment). */
 let nextChunkId = 0;
 
@@ -285,10 +282,6 @@ if (import.meta.env.DEV) {
 }
 
 async function handleDevPayment(): Promise<void> {
-  if (tutorPubkey === null) {
-    showError('[DEV] tutorPubkey not yet received from signaling server');
-    return;
-  }
   if (dataChannel === null || !dataChannel.isOpen) {
     showError('[DEV] data channel is not open');
     return;
@@ -297,8 +290,8 @@ async function handleDevPayment(): Promise<void> {
   const chunkId = nextChunkId;
 
   try {
-    // Swap wallet proofs into a P2PK-locked token for 1 sat test payment.
-    const proofs = await swapP2PKToken(1, tutorPubkey);
+    // Select a plain unlocked proof from the pre-split wallet for a 1 sat test payment.
+    const proofs = spendProofs(1);
 
     const encodedToken = getEncodedToken({
       mint: mintUrl,
@@ -417,11 +410,6 @@ peer.onDataChannel = (event) => {
     console.log('[datachannel] open');
     setDcStatus('open');
 
-    if (tutorPubkey === null) {
-      showError('[scheduler] tutorPubkey not available — cannot start payment scheduler');
-      return;
-    }
-
     // Load persisted state so the scheduler survives page reloads.
     const session = loadSession();
     const initialChunkId = session?.chunkCount ?? 0;
@@ -443,13 +431,12 @@ peer.onDataChannel = (event) => {
 
     scheduler = new PaymentScheduler(
       dataChannel,
-      swapP2PKToken,
+      spendProofs,
       (proofs, url) =>
         getEncodedToken({ mint: url, proofs, unit: 'sat' }),
       {
         intervalSecs: activeIntervalSeconds,
         chunkSats: activeRateSatsPerInterval,
-        tutorPubkey,
         mintUrl,
         initialChunkId,
         initialTotalSatsPaid,
@@ -519,7 +506,7 @@ peer.onTrack = (event) => {
 client.onMessage((msg: SignalingMessage) => {
   switch (msg.type) {
     case 'session_created':
-      // Viewer receives session_created after joining; verify mint then extract tutorPubkey.
+      // Viewer receives session_created after joining; verify mint and pre-split proofs.
       try {
         assertSameMint(msg.mintUrl);
       } catch (err) {
@@ -530,8 +517,6 @@ client.onMessage((msg: SignalingMessage) => {
         }
         throw err;
       }
-      tutorPubkey = msg.tutorPubkey;
-      console.log('[viewer] tutorPubkey received:', tutorPubkey);
       // Signaling message is authoritative — override invite-derived rate if present
       if (typeof msg.rateSatsPerInterval === 'number') {
         activeRateSatsPerInterval = msg.rateSatsPerInterval;
@@ -540,12 +525,19 @@ client.onMessage((msg: SignalingMessage) => {
         activeIntervalSeconds = msg.intervalSeconds;
       }
       console.log('[viewer] rate config:', activeRateSatsPerInterval, 'sats /', activeIntervalSeconds, 's');
+      // Pre-split proofs into exact-denomination chunks before the session starts.
+      setStatus('preparing wallet\u2026');
+      void preSplitProofs(activeRateSatsPerInterval, getBalance()).then((numChunks) => {
+        console.log(`[viewer] pre-split complete: ${numChunks} chunks of ${activeRateSatsPerInterval} sats`);
+        setStatus('wallet ready — waiting for tutor\u2026');
+      }).catch((err: unknown) => {
+        const reason = err instanceof Error ? err.message : String(err);
+        showError(`Pre-split failed: ${reason}`);
+      });
       break;
 
     case 'viewer_joined':
-      // viewer_joined also carries tutorPubkey (belt-and-suspenders).
-      tutorPubkey = msg.tutorPubkey;
-      console.log('[viewer] tutorPubkey from viewer_joined:', tutorPubkey);
+      // No tutorPubkey needed in the plain-token architecture.
       break;
 
     case 'offer':

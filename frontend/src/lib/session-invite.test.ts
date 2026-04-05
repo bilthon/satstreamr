@@ -33,7 +33,6 @@ beforeAll(() => {
 
 const SAMPLE_PAYLOAD: InvitePayload = {
   sessionId: 'abc123',
-  tutorPubkey: '02abcdef1234567890',
   rateSatsPerInterval: 2,
   intervalSeconds: 10,
   mintUrl: 'https://mint.example.com',
@@ -100,19 +99,6 @@ describe('parseInvite error handling', () => {
   it('returns null when sessionId field is missing', () => {
     const incomplete = btoa(
       JSON.stringify({
-        tutorPubkey: '02abc',
-        rateSatsPerInterval: 2,
-        intervalSeconds: 10,
-        mintUrl: 'https://mint.example.com',
-      })
-    );
-    expect(parseInvite(incomplete)).toBeNull();
-  });
-
-  it('returns null when tutorPubkey field is missing', () => {
-    const incomplete = btoa(
-      JSON.stringify({
-        sessionId: 'abc123',
         rateSatsPerInterval: 2,
         intervalSeconds: 10,
         mintUrl: 'https://mint.example.com',
@@ -125,7 +111,6 @@ describe('parseInvite error handling', () => {
     const invalid = btoa(
       JSON.stringify({
         sessionId: 'abc123',
-        tutorPubkey: '02abc',
         rateSatsPerInterval: '2',
         intervalSeconds: 10,
         mintUrl: 'https://mint.example.com',
@@ -138,7 +123,6 @@ describe('parseInvite error handling', () => {
     const incomplete = btoa(
       JSON.stringify({
         sessionId: 'abc123',
-        tutorPubkey: '02abc',
         rateSatsPerInterval: 2,
         mintUrl: 'https://mint.example.com',
       })
@@ -150,7 +134,6 @@ describe('parseInvite error handling', () => {
     const incomplete = btoa(
       JSON.stringify({
         sessionId: 'abc123',
-        tutorPubkey: '02abc',
         rateSatsPerInterval: 2,
         intervalSeconds: 10,
       })
@@ -160,5 +143,19 @@ describe('parseInvite error handling', () => {
 
   it('returns null for an empty string', () => {
     expect(parseInvite('')).toBeNull();
+  });
+
+  it('does not require tutorPubkey — payload without it is valid', () => {
+    const payload = btoa(
+      JSON.stringify({
+        sessionId: 'abc123',
+        rateSatsPerInterval: 2,
+        intervalSeconds: 10,
+        mintUrl: 'https://mint.example.com',
+      })
+    );
+    const result = parseInvite(payload);
+    expect(result).not.toBeNull();
+    expect(result?.sessionId).toBe('abc123');
   });
 });

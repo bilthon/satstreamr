@@ -3,16 +3,19 @@
  *
  * Unit tests for the Cashu wallet module.
  *
- * swapP2PKToken is tested with mocks for:
- *   - spendProofs/addProofs from wallet-store
- *   - CashuWallet instance methods (getFeesForProofs, send) via @cashu/cashu-ts mock
+ * preSplitProofs is tested with mocks for:
+ *   - spendProofs/addProofs/getProofs from wallet-store
+ *   - CashuWallet instance methods (getFeesForProofs, swap) via @cashu/cashu-ts mock
+ *
+ * claimProofs is tested with mocks for:
+ *   - CashuWallet.swap (plain swap, no privkey)
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Proof } from '../types/cashu.js';
 
 // ---------------------------------------------------------------------------
-// Mock wallet-store so spendProofs/addProofs never touch localStorage
+// Mock wallet-store so spendProofs/addProofs/getProofs never touch localStorage
 // ---------------------------------------------------------------------------
 
 vi.mock('./wallet-store.js', () => ({
@@ -28,7 +31,7 @@ vi.mock('./wallet-store.js', () => ({
 // Mock @cashu/cashu-ts so CashuWallet never hits the network
 // ---------------------------------------------------------------------------
 
-const mockSend = vi.fn();
+const mockSwap = vi.fn();
 const mockGetFeesForProofs = vi.fn(() => 0);
 const mockLoadMint = vi.fn(async () => undefined);
 const mockGetKeys = vi.fn(async () => ({}));
@@ -43,8 +46,8 @@ vi.mock('@cashu/cashu-ts', () => ({
     keysets: [MOCK_KEYSET],
     getKeys: mockGetKeys,
     getFeesForProofs: mockGetFeesForProofs,
-    send: mockSend,
-    swap: vi.fn(),
+    swap: mockSwap,
+    send: vi.fn(),
     checkProofsStates: vi.fn(),
   })),
   hasValidDleq: vi.fn(() => true),
@@ -55,8 +58,8 @@ vi.mock('@cashu/cashu-ts', () => ({
 // Import the module under test AFTER mocks are set up
 // ---------------------------------------------------------------------------
 
-import { spendProofs, addProofs } from './wallet-store.js';
-import { swapP2PKToken } from './cashu-wallet.js';
+import { spendProofs, addProofs, getProofs } from './wallet-store.js';
+import { preSplitProofs, claimProofs } from './cashu-wallet.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -66,98 +69,184 @@ function makeProof(amount: number, secret = 'mock-secret'): Proof {
   return { id: 'mock-id', amount, secret, C: 'mock-C' } as unknown as Proof;
 }
 
-const RECIPIENT_PUBKEY = '02' + 'ab'.repeat(32);
-
 // ---------------------------------------------------------------------------
-// Tests
+// preSplitProofs tests
 // ---------------------------------------------------------------------------
 
-describe('swapP2PKToken', () => {
+describe('preSplitProofs', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Default: no fee, fresh keyset list
     mockGetFeesForProofs.mockReturnValue(0);
     mockLoadMint.mockResolvedValue(undefined);
     mockGetKeys.mockResolvedValue({});
+    vi.mocked(getProofs).mockReturnValue([]);
   });
 
-  it('returns send proofs and adds change proofs to wallet on success', async () => {
-    const inputProofs = [makeProof(2)];
-    const sendProofs = [makeProof(1, 'send-secret')];
-    const keepProofs = [makeProof(1, 'keep-secret')];
+  it('returns the correct number of chunks and stores pre-split proofs', async () => {
+    const chunkSats = 2;
+    const totalBudget = 10;
+    const numChunks = Math.floor(totalBudget / chunkSats); // 5
+
+    const inputProofs = [makeProof(10)];
+    const sendProofs = Array.from({ length: numChunks }, (_, i) =>
+      makeProof(chunkSats, `send-secret-${i}`)
+    );
 
     vi.mocked(spendProofs).mockReturnValue(inputProofs);
-    mockSend.mockResolvedValue({ send: sendProofs, keep: keepProofs });
+    mockSwap.mockResolvedValue({ send: sendProofs, keep: [] });
 
-    const result = await swapP2PKToken(1, RECIPIENT_PUBKEY);
+    const result = await preSplitProofs(chunkSats, totalBudget);
 
-    expect(result).toEqual(sendProofs);
-    expect(spendProofs).toHaveBeenCalledWith(1);
+    expect(result).toBe(numChunks);
+    expect(spendProofs).toHaveBeenCalledWith(numChunks * chunkSats);
+    // sendAmounts should be an array of numChunks entries each equal to chunkSats
+    expect(mockSwap).toHaveBeenCalledWith(
+      numChunks * chunkSats,
+      inputProofs,
+      expect.objectContaining({
+        outputAmounts: {
+          sendAmounts: Array(numChunks).fill(chunkSats),
+        },
+      })
+    );
+    expect(addProofs).toHaveBeenCalledWith(sendProofs);
+  });
+
+  it('adds change (keep) proofs back to the wallet', async () => {
+    const chunkSats = 3;
+    const totalBudget = 10; // floor(10/3) = 3 chunks, 9 sats, 1 sat change
+
+    const inputProofs = [makeProof(10)];
+    const sendProofs = [makeProof(3, 's1'), makeProof(3, 's2'), makeProof(3, 's3')];
+    const keepProofs = [makeProof(1, 'change')];
+
+    vi.mocked(spendProofs).mockReturnValue(inputProofs);
+    mockSwap.mockResolvedValue({ send: sendProofs, keep: keepProofs });
+
+    await preSplitProofs(chunkSats, totalBudget);
+
+    expect(addProofs).toHaveBeenCalledWith(sendProofs);
     expect(addProofs).toHaveBeenCalledWith(keepProofs);
   });
 
-  it('re-selects proofs when fee makes initial selection insufficient', async () => {
-    const smallProofs = [makeProof(1)];
-    const largerProofs = [makeProof(2)];
-    const sendProofs = [makeProof(1, 'send-secret')];
-
-    // Fee of 1 means we need 2 total but only selected 1.
-    mockGetFeesForProofs.mockReturnValue(1);
-    vi.mocked(spendProofs)
-      .mockReturnValueOnce(smallProofs)   // first selection (too small)
-      .mockReturnValueOnce(largerProofs); // re-selection with fee included
-
-    mockSend.mockResolvedValue({ send: sendProofs, keep: [] });
-
-    const result = await swapP2PKToken(1, RECIPIENT_PUBKEY);
-
-    expect(result).toEqual(sendProofs);
-    // Returns under-sized proofs and re-selects with totalNeeded = 1 + 1 = 2
-    expect(addProofs).toHaveBeenCalledWith(smallProofs);
-    expect(spendProofs).toHaveBeenNthCalledWith(2, 2);
+  it('throws when totalBudget is less than one chunkSats', async () => {
+    await expect(preSplitProofs(10, 5)).rejects.toThrow(
+      'Insufficient balance for even one payment chunk'
+    );
   });
 
-  it('does not call addProofs for keep when keep is empty', async () => {
-    const inputProofs = [makeProof(1)];
-    const sendProofs = [makeProof(1, 'send-secret')];
+  it('skips the swap when exact-denomination proofs already exist in sufficient quantity', async () => {
+    const chunkSats = 2;
+    const totalBudget = 6; // 3 chunks needed
+    const existingProofs = [makeProof(2, 'a'), makeProof(2, 'b'), makeProof(2, 'c')];
 
-    vi.mocked(spendProofs).mockReturnValue(inputProofs);
-    mockSend.mockResolvedValue({ send: sendProofs, keep: [] });
+    vi.mocked(getProofs).mockReturnValue(existingProofs);
 
-    await swapP2PKToken(1, RECIPIENT_PUBKEY);
+    const result = await preSplitProofs(chunkSats, totalBudget);
 
-    // addProofs should NOT have been called (no change to return)
-    expect(addProofs).not.toHaveBeenCalled();
+    expect(result).toBe(3);
+    expect(mockSwap).not.toHaveBeenCalled();
+    expect(spendProofs).not.toHaveBeenCalled();
   });
 
-  it('rolls back input proofs to wallet on send failure', async () => {
-    const inputProofs = [makeProof(2)];
+  it('rolls back input proofs to wallet on swap failure', async () => {
+    const inputProofs = [makeProof(10)];
 
     vi.mocked(spendProofs).mockReturnValue(inputProofs);
-    mockSend.mockRejectedValue(new Error('mint unreachable'));
+    mockSwap.mockRejectedValue(new Error('mint unreachable'));
 
-    await expect(swapP2PKToken(1, RECIPIENT_PUBKEY)).rejects.toThrow('mint unreachable');
+    await expect(preSplitProofs(2, 10)).rejects.toThrow('mint unreachable');
 
     // Rollback: input proofs must be returned to the wallet.
     expect(addProofs).toHaveBeenCalledWith(inputProofs);
   });
 
-  it('passes p2pk pubkey and includeFees to wallet.send()', async () => {
-    const inputProofs = [makeProof(5)];
-    const sendProofs = [makeProof(2, 'locked')];
+  it('re-selects proofs with fee buffer when initial selection is insufficient', async () => {
+    const chunkSats = 2;
+    const totalBudget = 10; // 5 chunks, 10 sats total
+    const smallProofs = [makeProof(10)]; // first selection
+    const biggerProofs = [makeProof(11)]; // re-selection with fee buffer
+    const sendProofs = Array.from({ length: 5 }, (_, i) => makeProof(2, `s${i}`));
 
-    vi.mocked(spendProofs).mockReturnValue(inputProofs);
-    mockSend.mockResolvedValue({ send: sendProofs, keep: [makeProof(3, 'change')] });
+    mockGetFeesForProofs.mockReturnValue(1); // fee of 1 sat
+    vi.mocked(spendProofs)
+      .mockReturnValueOnce(smallProofs)  // initial selection: 10 sats, but need 10+1=11
+      .mockReturnValueOnce(biggerProofs); // re-selection with fee included
 
-    await swapP2PKToken(2, RECIPIENT_PUBKEY);
+    mockSwap.mockResolvedValue({ send: sendProofs, keep: [] });
 
-    expect(mockSend).toHaveBeenCalledWith(
-      2,
-      inputProofs,
-      expect.objectContaining({
-        p2pk: { pubkey: RECIPIENT_PUBKEY },
-        includeFees: true,
-      }),
+    const result = await preSplitProofs(chunkSats, totalBudget);
+
+    expect(result).toBe(5);
+    // Should have returned undersized selection and re-selected with fee
+    expect(addProofs).toHaveBeenCalledWith(smallProofs);
+    expect(spendProofs).toHaveBeenNthCalledWith(2, 11); // totalAmount + fee = 10 + 1
+  });
+});
+
+// ---------------------------------------------------------------------------
+// claimProofs tests
+// ---------------------------------------------------------------------------
+
+describe('claimProofs', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetFeesForProofs.mockReturnValue(0);
+    mockLoadMint.mockResolvedValue(undefined);
+    mockGetKeys.mockResolvedValue({});
+  });
+
+  it('swaps proofs and returns success with new proofs', async () => {
+    const inProofs = [makeProof(5, 'in1')];
+    const keepProofs = [makeProof(4, 'keep1')];
+    const sendProofs = [makeProof(1, 'send1')];
+
+    mockGetFeesForProofs.mockReturnValue(0);
+    mockSwap.mockResolvedValue({ keep: keepProofs, send: sendProofs });
+
+    const result = await claimProofs(inProofs);
+
+    expect(result.success).toBe(true);
+    expect(result.newProofs).toEqual([...keepProofs, ...sendProofs]);
+    // Should call swap with amount = totalAmount - fee = 5 - 0 = 5
+    expect(mockSwap).toHaveBeenCalledWith(5, inProofs);
+  });
+
+  it('deducts fee from receiveAmount', async () => {
+    const inProofs = [makeProof(5, 'in1')];
+    const keepProofs = [makeProof(4, 'k1')];
+
+    mockGetFeesForProofs.mockReturnValue(1); // 1 sat fee
+    mockSwap.mockResolvedValue({ keep: keepProofs, send: [] });
+
+    const result = await claimProofs(inProofs);
+
+    // swap called with receiveAmount = 5 - 1 = 4
+    expect(mockSwap).toHaveBeenCalledWith(4, inProofs);
+    expect(result.success).toBe(true);
+  });
+
+  it('throws when fee exceeds proof total', async () => {
+    const inProofs = [makeProof(1, 'tiny')];
+
+    mockGetFeesForProofs.mockReturnValue(2); // fee exceeds total
+
+    await expect(claimProofs(inProofs)).rejects.toThrow(
+      'Proof total (1) cannot cover swap fee (2)'
     );
+    expect(mockSwap).not.toHaveBeenCalled();
+  });
+
+  it('does not pass privkey to the swap call (plain swap, no P2PK)', async () => {
+    const inProofs = [makeProof(3, 'plain')];
+    mockSwap.mockResolvedValue({ keep: [makeProof(3, 'new')], send: [] });
+
+    await claimProofs(inProofs);
+
+    // swap should be called with exactly 2 arguments — no options object
+    expect(mockSwap).toHaveBeenCalledWith(3, inProofs);
+    // Verify no privkey option was passed
+    const callArgs = mockSwap.mock.calls[0] as unknown[];
+    expect(callArgs).toHaveLength(2);
   });
 });

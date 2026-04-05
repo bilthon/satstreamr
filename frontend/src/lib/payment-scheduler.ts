@@ -23,13 +23,18 @@ import { getBalance } from './wallet-store.js';
 // Types
 // ---------------------------------------------------------------------------
 
-export type MintTokenFn = (amountSats: number, tutorPubkey: string) => Promise<Proof[]>;
+/**
+ * Synchronous function that selects proofs from the local wallet store for
+ * the given amount. No mint call required — proofs were pre-split at session
+ * start and are already in the correct denomination.
+ */
+export type SelectProofsFn = (amountSats: number) => Proof[];
+
 export type EncodeTokenFn = (proofs: Proof[], mintUrl: string) => string;
 
 export interface PaymentSchedulerOpts {
   intervalSecs: number;
   chunkSats: number;
-  tutorPubkey: string;
   mintUrl: string;
   /** Initial chunkId — caller loads this from session storage. */
   initialChunkId?: number;
@@ -53,7 +58,7 @@ const ACK_TIMEOUT_MS = 5_000;
 
 export class PaymentScheduler {
   private readonly dc: DataChannel;
-  private readonly mintToken: MintTokenFn;
+  private readonly selectProofs: SelectProofsFn;
   private readonly encodeToken: EncodeTokenFn;
   private readonly opts: Readonly<Required<PaymentSchedulerOpts>>;
 
@@ -80,12 +85,12 @@ export class PaymentScheduler {
 
   constructor(
     dataChannel: DataChannel,
-    mintTokenFn: MintTokenFn,
+    selectProofsFn: SelectProofsFn,
     encodeTokenFn: EncodeTokenFn,
     opts: PaymentSchedulerOpts,
   ) {
     this.dc = dataChannel;
-    this.mintToken = mintTokenFn;
+    this.selectProofs = selectProofsFn;
     this.encodeToken = encodeTokenFn;
 
     // Apply defaults for optional fields
@@ -162,7 +167,7 @@ export class PaymentScheduler {
       return;
     }
 
-    // Check wallet balance before attempting to mint/swap.
+    // Check wallet balance before attempting to select proofs.
     if (getBalance() < this.opts.chunkSats) {
       this.fireBudgetExhausted();
       return;
@@ -170,14 +175,14 @@ export class PaymentScheduler {
 
     const chunkId = this.chunkId;
 
-    // Swap existing wallet proofs into a P2PK-locked token for this chunk.
+    // Synchronously select pre-split proofs from the wallet for this chunk.
     let encodedToken: string;
     try {
-      const proofs = await this.mintToken(this.opts.chunkSats, this.opts.tutorPubkey);
+      const proofs = this.selectProofs(this.opts.chunkSats);
       encodedToken = this.encodeToken(proofs, this.opts.mintUrl);
     } catch (err: unknown) {
       const reason = err instanceof Error ? err.message : String(err);
-      console.error('[payment-scheduler] mintToken failed:', reason);
+      console.error('[payment-scheduler] selectProofs failed:', reason);
       this.fireFailed(reason);
       return;
     }

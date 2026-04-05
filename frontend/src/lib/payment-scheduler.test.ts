@@ -65,9 +65,12 @@ function makeMockDataChannel() {
   return dc;
 }
 
-/** Creates a mock mintToken function that resolves immediately with a dummy proof. */
-function makeMockMintToken() {
-  return vi.fn(async (_amountSats: number, _pubkey: string): Promise<Proof[]> => {
+/**
+ * Creates a mock selectProofs function that returns a dummy proof synchronously.
+ * Mirrors the real spendProofs signature: (amountSats: number) => Proof[]
+ */
+function makeMockSelectProofs() {
+  return vi.fn((_amountSats: number): Proof[] => {
     return [{ id: 'mock-id', amount: _amountSats, secret: 'mock-secret', C: 'mock-C' } as unknown as Proof];
   });
 }
@@ -81,7 +84,6 @@ function makeMockEncodeToken() {
 
 const INTERVAL_SECS = 10;
 const CHUNK_SATS = 1;
-const TUTOR_PUBKEY = '02' + 'ab'.repeat(32);
 const MINT_URL = 'http://localhost:3338';
 
 // ---------------------------------------------------------------------------
@@ -105,7 +107,7 @@ describe('PaymentScheduler', () => {
   // -------------------------------------------------------------------------
   it('happy path: after 3 intervals, chunkId === 3 and totalSatsPaid === 3 * chunkSats', async () => {
     const dc = makeMockDataChannel();
-    const mintToken = makeMockMintToken();
+    const selectProofs = makeMockSelectProofs();
     const encodeToken = makeMockEncodeToken();
 
     let chunkCount = 0;
@@ -113,10 +115,9 @@ describe('PaymentScheduler', () => {
 
     const stateChanges: { chunkId: number; totalSatsPaid: number }[] = [];
 
-    const scheduler = new PaymentScheduler(dc, mintToken, encodeToken, {
+    const scheduler = new PaymentScheduler(dc, selectProofs, encodeToken, {
       intervalSecs: INTERVAL_SECS,
       chunkSats: CHUNK_SATS,
-      tutorPubkey: TUTOR_PUBKEY,
       mintUrl: MINT_URL,
       onStateChange: (state) => { stateChanges.push({ ...state }); },
     });
@@ -130,8 +131,7 @@ describe('PaymentScheduler', () => {
 
     // Advance through 3 complete payment cycles.
     for (let i = 0; i < 3; i++) {
-      // Advance past the interval timer so tick() fires, and allow the async
-      // mintToken to resolve via advanceTimersByTimeAsync.
+      // Advance past the interval timer so tick() fires.
       await vi.advanceTimersByTimeAsync(INTERVAL_SECS * 1000);
 
       // The scheduler sent a token_payment — simulate an immediate ack.
@@ -157,16 +157,15 @@ describe('PaymentScheduler', () => {
   // -------------------------------------------------------------------------
   it('retry: drops first ack (timeout), acks the retry, scheduler continues', async () => {
     const dc = makeMockDataChannel();
-    const mintToken = makeMockMintToken();
+    const selectProofs = makeMockSelectProofs();
     const encodeToken = makeMockEncodeToken();
 
     const chunksPaid: number[] = [];
     const failureReasons: string[] = [];
 
-    const scheduler = new PaymentScheduler(dc, mintToken, encodeToken, {
+    const scheduler = new PaymentScheduler(dc, selectProofs, encodeToken, {
       intervalSecs: INTERVAL_SECS,
       chunkSats: CHUNK_SATS,
-      tutorPubkey: TUTOR_PUBKEY,
       mintUrl: MINT_URL,
     });
 
@@ -217,16 +216,15 @@ describe('PaymentScheduler', () => {
   // -------------------------------------------------------------------------
   it('double timeout: onPaymentFailure fires after two 5s timeouts and scheduler stops', async () => {
     const dc = makeMockDataChannel();
-    const mintToken = makeMockMintToken();
+    const selectProofs = makeMockSelectProofs();
     const encodeToken = makeMockEncodeToken();
 
     const failureReasons: string[] = [];
     const chunksPaid: number[] = [];
 
-    const scheduler = new PaymentScheduler(dc, mintToken, encodeToken, {
+    const scheduler = new PaymentScheduler(dc, selectProofs, encodeToken, {
       intervalSecs: INTERVAL_SECS,
       chunkSats: CHUNK_SATS,
-      tutorPubkey: TUTOR_PUBKEY,
       mintUrl: MINT_URL,
     });
 
@@ -270,7 +268,7 @@ describe('PaymentScheduler', () => {
   // -------------------------------------------------------------------------
   it('budget exhaustion: onBudgetExhausted fires when getBalance() drops below chunkSats', async () => {
     const dc = makeMockDataChannel();
-    const mintToken = makeMockMintToken();
+    const selectProofs = makeMockSelectProofs();
     const encodeToken = makeMockEncodeToken();
 
     let budgetExhaustedCount = 0;
@@ -279,10 +277,9 @@ describe('PaymentScheduler', () => {
     // Start with enough balance for 3 chunks.
     vi.mocked(getBalance).mockReturnValue(3);
 
-    const scheduler = new PaymentScheduler(dc, mintToken, encodeToken, {
+    const scheduler = new PaymentScheduler(dc, selectProofs, encodeToken, {
       intervalSecs: INTERVAL_SECS,
       chunkSats: CHUNK_SATS,
-      tutorPubkey: TUTOR_PUBKEY,
       mintUrl: MINT_URL,
     });
 
@@ -317,5 +314,28 @@ describe('PaymentScheduler', () => {
 
     const totalSentAfter = dc.sent.filter((m) => m.type === 'token_payment').length;
     expect(totalSentAfter).toBe(3); // still 3
+  });
+
+  // -------------------------------------------------------------------------
+  // Test 5 — selectProofs is called synchronously (no await)
+  // -------------------------------------------------------------------------
+  it('selectProofs is called synchronously with chunkSats on each tick', async () => {
+    const dc = makeMockDataChannel();
+    const selectProofs = makeMockSelectProofs();
+    const encodeToken = makeMockEncodeToken();
+
+    const scheduler = new PaymentScheduler(dc, selectProofs, encodeToken, {
+      intervalSecs: INTERVAL_SECS,
+      chunkSats: CHUNK_SATS,
+      mintUrl: MINT_URL,
+    });
+
+    scheduler.start();
+    await vi.advanceTimersByTimeAsync(INTERVAL_SECS * 1000);
+
+    expect(selectProofs).toHaveBeenCalledWith(CHUNK_SATS);
+    expect(selectProofs).toHaveBeenCalledTimes(1);
+
+    scheduler.stop();
   });
 });

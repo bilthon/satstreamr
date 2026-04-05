@@ -25,7 +25,6 @@ export type OutboundMessageType =
 
 export interface CreateSessionMessage {
   type: 'create_session';
-  tutorPubkey: string;
   mintUrl: string;
   rateSatsPerInterval?: number;
   intervalSeconds?: number;
@@ -83,7 +82,6 @@ export type InboundMessage =
 export interface SessionCreatedMessage {
   type: 'session_created';
   sessionId: string;
-  tutorPubkey: string;
   mintUrl: string;
   rateSatsPerInterval?: number;
   intervalSeconds?: number;
@@ -92,7 +90,6 @@ export interface SessionCreatedMessage {
 export interface ViewerJoinedMessage {
   type: 'viewer_joined';
   viewerId: string;
-  tutorPubkey: string;
 }
 
 export interface SessionRejoinedMessage {
