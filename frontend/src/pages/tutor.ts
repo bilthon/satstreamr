@@ -690,7 +690,6 @@ function handleSessionCreated(id: string): void {
     role: 'tutor',
     chunkCount: 0,
     totalSatsPaid: 0,
-    budgetRemaining: 0,
   });
 
   if (sessionIdEl !== null) {

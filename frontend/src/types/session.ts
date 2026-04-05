@@ -6,5 +6,4 @@ export interface SessionState {
   role: Role;
   chunkCount: number;
   totalSatsPaid: number;
-  budgetRemaining: number;
 }

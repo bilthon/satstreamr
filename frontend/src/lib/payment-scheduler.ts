@@ -8,10 +8,11 @@
  *   pending from the previous send.
  * - Retry logic: if no ack arrives within ACK_TIMEOUT_MS, resends the same
  *   encoded token. A second timeout fires onPaymentFailure and stops the loop.
- * - Budget is decremented only after a payment_ack is received.
- * - State (chunkId, totalSatsPaid, budgetRemaining) is persisted via an
- *   injected onStateChange callback so this module has zero DOM dependencies
- *   and remains fully testable in a node environment.
+ * - Budget is derived from getBalance() — the wallet store is the single source
+ *   of truth. No local budgetRemaining counter.
+ * - State (chunkId, totalSatsPaid) is persisted via an injected onStateChange
+ *   callback so this module has zero DOM dependencies and remains fully
+ *   testable in a node environment.
  */
 
 import type { DataChannel } from './data-channel.js';
@@ -28,8 +29,6 @@ export type EncodeTokenFn = (proofs: Proof[], mintUrl: string) => string;
 export interface PaymentSchedulerOpts {
   intervalSecs: number;
   chunkSats: number;
-  /** Budget in sats. If omitted, defaults to the current wallet-store balance. */
-  budgetSats?: number;
   tutorPubkey: string;
   mintUrl: string;
   /** Initial chunkId — caller loads this from session storage. */
@@ -43,7 +42,6 @@ export interface PaymentSchedulerOpts {
 export interface SchedulerState {
   chunkId: number;
   totalSatsPaid: number;
-  budgetRemaining: number;
 }
 
 // How long (ms) to wait for a payment_ack before retrying.
@@ -62,7 +60,6 @@ export class PaymentScheduler {
   // Mutable scheduler state
   private chunkId: number;
   private totalSatsPaid: number;
-  private budgetRemaining: number;
 
   private running = false;
   private pending = false;
@@ -75,13 +72,11 @@ export class PaymentScheduler {
   private retryCount = 0;
   // The encoded token for the current in-flight chunk (reused on retry)
   private inflightEncodedToken: string | null = null;
-  // The actual amount minted (chunkSats + swapFee) for the current in-flight chunk
-  private inflightMintedAmount = 0;
 
   // Listeners
   private budgetExhaustedListeners: Array<() => void> = [];
   private paymentFailureListeners: Array<(reason: string) => void> = [];
-  private chunkPaidListeners: Array<(chunkId: number, totalPaid: number, budgetRemaining: number) => void> = [];
+  private chunkPaidListeners: Array<(chunkId: number, totalPaid: number, balance: number) => void> = [];
 
   constructor(
     dataChannel: DataChannel,
@@ -94,10 +89,8 @@ export class PaymentScheduler {
     this.encodeToken = encodeTokenFn;
 
     // Apply defaults for optional fields
-    const resolvedBudget = opts.budgetSats ?? getBalance();
     this.opts = {
       ...opts,
-      budgetSats: resolvedBudget,
       initialChunkId: opts.initialChunkId ?? 0,
       initialTotalSatsPaid: opts.initialTotalSatsPaid ?? 0,
       onStateChange: opts.onStateChange ?? (() => undefined),
@@ -105,7 +98,6 @@ export class PaymentScheduler {
 
     this.chunkId = this.opts.initialChunkId;
     this.totalSatsPaid = this.opts.initialTotalSatsPaid;
-    this.budgetRemaining = resolvedBudget;
 
     // Wire up incoming ack/nack handler
     this.dc.onMessage((msg) => {
@@ -144,7 +136,7 @@ export class PaymentScheduler {
     this.paymentFailureListeners.push(cb);
   }
 
-  onChunkPaid(cb: (chunkId: number, totalPaid: number, budgetRemaining: number) => void): void {
+  onChunkPaid(cb: (chunkId: number, totalPaid: number, balance: number) => void): void {
     this.chunkPaidListeners.push(cb);
   }
 
@@ -170,21 +162,19 @@ export class PaymentScheduler {
       return;
     }
 
-    if (this.budgetRemaining <= 0) {
-      // Budget already exhausted; stop silently.
-      this.stop();
+    // Check wallet balance before attempting to mint/swap.
+    if (getBalance() < this.opts.chunkSats) {
+      this.fireBudgetExhausted();
       return;
     }
 
     const chunkId = this.chunkId;
 
-    // Mint a fresh token for this chunk.
+    // Swap existing wallet proofs into a P2PK-locked token for this chunk.
     let encodedToken: string;
-    let mintedAmount: number;
     try {
       const proofs = await this.mintToken(this.opts.chunkSats, this.opts.tutorPubkey);
       encodedToken = this.encodeToken(proofs, this.opts.mintUrl);
-      mintedAmount = proofs.reduce((sum, p) => sum + p.amount, 0);
     } catch (err: unknown) {
       const reason = err instanceof Error ? err.message : String(err);
       console.error('[payment-scheduler] mintToken failed:', reason);
@@ -193,7 +183,6 @@ export class PaymentScheduler {
     }
 
     this.inflightEncodedToken = encodedToken;
-    this.inflightMintedAmount = mintedAmount;
     this.retryCount = 0;
     await this.sendChunk(chunkId, encodedToken);
   }
@@ -251,27 +240,21 @@ export class PaymentScheduler {
     this.pending = false;
     this.inflightEncodedToken = null;
 
-    // Decrement budget by the actual minted amount (chunkSats + swapFee) so
-    // the viewer's budget reflects what was truly spent from their Cashu wallet.
-    const spent = this.inflightMintedAmount;
-    this.inflightMintedAmount = 0;
-    this.budgetRemaining -= spent;
-    this.totalSatsPaid += spent;
+    this.totalSatsPaid += this.opts.chunkSats;
     const paidChunkId = this.chunkId;
     this.chunkId += 1;
 
     this.persistState();
 
+    const balance = getBalance();
+
     // Notify listeners
     for (const cb of this.chunkPaidListeners) {
-      cb(paidChunkId, this.totalSatsPaid, this.budgetRemaining);
+      cb(paidChunkId, this.totalSatsPaid, balance);
     }
 
-    if (this.budgetRemaining <= 0) {
-      for (const cb of this.budgetExhaustedListeners) {
-        cb();
-      }
-      this.stop();
+    if (balance < this.opts.chunkSats) {
+      this.fireBudgetExhausted();
       return;
     }
 
@@ -288,6 +271,14 @@ export class PaymentScheduler {
 
     console.warn(`[payment-scheduler] nack for chunk #${nackedChunkId}: ${reason}`);
     this.fireFailed(`payment_nack for chunk #${nackedChunkId}: ${reason}`);
+  }
+
+  /** Fires onBudgetExhausted listeners and stops. */
+  private fireBudgetExhausted(): void {
+    for (const cb of this.budgetExhaustedListeners) {
+      cb();
+    }
+    this.stop();
   }
 
   /** Fires onPaymentFailure listeners, sends session_paused, and stops. */
@@ -320,7 +311,6 @@ export class PaymentScheduler {
     this.opts.onStateChange({
       chunkId: this.chunkId,
       totalSatsPaid: this.totalSatsPaid,
-      budgetRemaining: this.budgetRemaining,
     });
   }
 }
