@@ -3,9 +3,9 @@
  *
  * Browser-targeted Cashu wallet module for satstreamr.
  *
- * Wraps @cashu/cashu-ts to provide the three Cashu operations needed by the
+ * Wraps @cashu/cashu-ts to provide the Cashu operations needed by the
  * payment flow:
- *   - mintP2PKToken   — NUT-04 mint + NUT-11 P2PK lock + NUT-12 DLEQ verify
+ *   - swapP2PKToken   — NUT-03 swap with NUT-11 P2PK lock (single HTTP POST, no Lightning)
  *   - redeemToken     — NUT-03 swap using NUT-11 private key signature
  *   - checkTokenState — NUT-07 proof state query
  *
@@ -13,16 +13,15 @@
  * VITE_MINT_URL when set, otherwise uses the Vite proxy path /mint so the
  * app works on both localhost and LAN without manual configuration.
  *
- * REGTEST NOTE: Invoice payment in mintP2PKToken uses the LND REST API
- * (proxied through Vite's dev server at /lnd-customer) to pay the invoice
- * automatically. This is regtest-only scaffolding. In production the user
- * pays the invoice in their own Lightning wallet and the caller polls
- * checkMintQuote until the state is PAID before calling mintProofs.
+ * ARCHITECTURE NOTE: Lightning is used only for deposit (fund wallet) and
+ * withdraw (cash out). Streaming micropayments use Cashu swaps — fast,
+ * reliable, ~50-200ms, no Lightning round-trip in the payment loop.
  */
 
-import { CashuMint, CashuWallet, hasValidDleq } from '@cashu/cashu-ts';
+import { CashuMint, CashuWallet } from '@cashu/cashu-ts';
 import type { Proof, MintKeys } from '../types/cashu.js';
 import { getMintUrl } from './config.js';
+import { spendProofs, addProofs } from './wallet-store.js';
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -60,124 +59,69 @@ export async function buildWallet(): Promise<{
   return { wallet, mintKeys, feePpk };
 }
 
-/** NUT-02 fee: ceil(n_inputs * fee_ppk / 1000) */
-function calcFee(nInputs: number, feePpk: number): number {
-  return Math.ceil((nInputs * feePpk) / 1000);
-}
-
-/**
- * Pays a BOLT11 invoice via the LND REST API proxied through Vite's dev server.
- *
- * REGTEST SCAFFOLDING — only called inside `if (import.meta.env.DEV)` guards.
- * Production flow: display the invoice to the user; they pay it in their own
- * Lightning wallet.
- *
- * Proxy: Vite forwards /lnd-customer/* → https://localhost:8082/* (secure: false)
- * so TLS certificate errors from the self-signed LND cert are bypassed in dev.
- */
-async function payInvoiceRegtest(bolt11: string): Promise<void> {
-  const macaroon = import.meta.env['VITE_LND_CUSTOMER_MACAROON_HEX'] as string | undefined;
-  if (!macaroon) {
-    throw new Error(
-      'VITE_LND_CUSTOMER_MACAROON_HEX is not defined. ' +
-      'Set it in your .env file for regtest invoice auto-payment.'
-    );
-  }
-
-  const response = await fetch('/lnd-customer/v1/channels/transactions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Grpc-Metadata-macaroon': macaroon,
-    },
-    body: JSON.stringify({ payment_request: bolt11 }),
-  });
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => '(no body)');
-    throw new Error(
-      `LND payinvoice failed: HTTP ${response.status} — ${text}`
-    );
-  }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 /**
- * Mints a NUT-11 P2PK-locked Cashu token.
+ * Swaps existing wallet proofs into NUT-11 P2PK-locked proofs for the recipient.
  *
- * Internally:
- *   1. Fetches active keyset to determine input_fee_ppk.
- *   2. Mints amountSats + swap_fee so the recipient can swap without going
- *      below zero value.
- *   3. Pays the Lightning invoice via lnd_customer (regtest only).
- *   4. Mints proofs locked to recipientPubkey.
- *   5. Verifies NUT-12 DLEQ on every proof — throws DLEQVerificationError
- *      if any proof fails.
+ * Uses a single HTTP POST to the mint (NUT-03 swap) — no Lightning invoice,
+ * no polling. Latency is ~50-200ms versus ~2-3s for a Lightning round-trip.
  *
- * @param amountSats     Net value the recipient will hold after redeeming.
+ * Flow:
+ *   1. Select proofs from the local wallet covering amountSats.
+ *   2. Calculate the swap fee; re-select if the first selection is too small.
+ *   3. POST to the mint: returns P2PK-locked send proofs + unlocked change.
+ *   4. Return change proofs to the wallet.
+ *   5. On any error, roll back all consumed proofs to the wallet.
+ *
+ * The viewer pays the tutor's future redemption fee via `includeFees: true`.
+ *
+ * @param amountSats      Net value the recipient will hold after redeeming.
  * @param recipientPubkey Compressed secp256k1 public key (33-byte hex, 66 chars).
- * @returns Array of P2PK-locked Proofs.
+ * @returns Array of P2PK-locked Proofs ready to send to the tutor.
  */
-export async function mintP2PKToken(
+export async function swapP2PKToken(
   amountSats: number,
   recipientPubkey: string
 ): Promise<Proof[]> {
-  const { wallet, mintKeys, feePpk } = await buildWallet();
+  const { wallet } = await buildWallet();
 
-  // Add the swap fee so the recipient can redeem without going to zero.
-  // One proof is minted (1 input during the recipient's swap).
-  const swapFee = calcFee(1, feePpk);
-  const mintAmount = amountSats + swapFee;
+  // Select proofs from the wallet for the requested amount.
+  let inputProofs = spendProofs(amountSats);
 
-  // Request a mint quote.
-  const mintQuote = await wallet.createMintQuote(mintAmount);
+  // Calculate the swap fee based on the selected inputs and re-select if
+  // the first selection is not large enough to cover amount + fee.
+  const fee = wallet.getFeesForProofs(inputProofs);
+  const totalNeeded = amountSats + fee;
+  const totalSelected = inputProofs.reduce((s, p) => s + p.amount, 0);
 
-  // Pay the invoice (regtest scaffolding — see module doc comment).
-  if (import.meta.env.DEV) {
-    await payInvoiceRegtest(mintQuote.request);
+  if (totalSelected < totalNeeded) {
+    // Return the under-sized selection and pick a larger batch.
+    addProofs(inputProofs);
+    inputProofs = spendProofs(totalNeeded);
   }
 
-  // Poll until the mint sees the payment.
-  await sleep(1500);
-  let quoteState = await wallet.checkMintQuote(mintQuote.quote);
-  for (let i = 0; i < 10 && quoteState.state !== 'PAID' && quoteState.state !== 'ISSUED'; i++) {
-    await sleep(1000);
-    quoteState = await wallet.checkMintQuote(mintQuote.quote);
-  }
-  if (quoteState.state !== 'PAID' && quoteState.state !== 'ISSUED') {
-    throw new Error(`Mint quote did not reach PAID state. Current state: ${quoteState.state}`);
-  }
+  try {
+    // Swap at the mint: locked proofs go to the tutor, change comes back.
+    // includeFees: true means the viewer covers the tutor's redemption fee.
+    const result = await wallet.send(amountSats, inputProofs, {
+      p2pk: { pubkey: recipientPubkey },
+      includeFees: true,
+    });
 
-  // Mint proofs locked to the recipient's public key.
-  const lockedProofs = await wallet.mintProofs(mintAmount, mintQuote.quote, {
-    p2pk: { pubkey: recipientPubkey },
-  });
-
-  if (!lockedProofs || lockedProofs.length === 0) {
-    throw new Error('mintProofs returned an empty proof array');
-  }
-
-  // NUT-12 DLEQ verification.
-  for (const proof of lockedProofs) {
-    if (proof.dleq) {
-      const valid = hasValidDleq(proof, mintKeys);
-      if (!valid) {
-        throw new DLEQVerificationError(
-          `DLEQ verification failed for proof amount=${proof.amount}`
-        );
-      }
+    // Return change to the wallet store.
+    if (result.keep.length > 0) {
+      addProofs(result.keep);
     }
-  }
-  console.log('DLEQ OK');
 
-  return lockedProofs;
+    return result.send;
+  } catch (err) {
+    // Rollback: put all consumed proofs back in the wallet on any failure.
+    addProofs(inputProofs);
+    throw err;
+  }
 }
 
 /**
@@ -194,10 +138,10 @@ export async function redeemToken(
   proofs: Proof[],
   privkeyHex: string
 ): Promise<{ success: boolean; newProofs: Proof[] }> {
-  const { wallet, feePpk } = await buildWallet();
+  const { wallet } = await buildWallet();
 
   const totalAmount = proofs.reduce((s, p) => s + p.amount, 0);
-  const fee = calcFee(proofs.length, feePpk);
+  const fee = wallet.getFeesForProofs(proofs);
   const receiveAmount = totalAmount - fee;
 
   if (receiveAmount <= 0) {

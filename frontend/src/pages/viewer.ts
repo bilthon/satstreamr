@@ -2,12 +2,12 @@ import { getEncodedToken } from '@cashu/cashu-ts';
 import { SignalingClient } from '../signaling-client.js';
 import { PeerConnection } from '../lib/peer-connection.js';
 import { DataChannel } from '../lib/data-channel.js';
-import { mintP2PKToken } from '../lib/cashu-wallet.js';
+import { swapP2PKToken } from '../lib/cashu-wallet.js';
 import { PaymentScheduler } from '../lib/payment-scheduler.js';
 import type { SignalingMessage } from '../types/signaling.js';
 import { saveSession, loadSession, updateSession, clearSession } from '../lib/session-storage.js';
 import { assertSameMint, MintMismatchError } from '../lib/mint-guard.js';
-import { getBalance } from '../lib/wallet-store.js';
+import { getBalance, onBalanceChange } from '../lib/wallet-store.js';
 import { getMintUrl } from '../lib/config.js';
 
 // Derive the signaling WebSocket URL. If VITE_SIGNALING_URL is set at build
@@ -297,8 +297,8 @@ async function handleDevPayment(): Promise<void> {
   const chunkId = nextChunkId;
 
   try {
-    // Mint a P2PK-locked token; 2 sat covers the 1 sat value + swap fee
-    const proofs = await mintP2PKToken(2, tutorPubkey);
+    // Swap wallet proofs into a P2PK-locked token for 1 sat test payment.
+    const proofs = await swapP2PKToken(1, tutorPubkey);
 
     const encodedToken = getEncodedToken({
       mint: mintUrl,
@@ -351,7 +351,6 @@ client.onConnect(() => {
     role: 'viewer',
     chunkCount: isSameSession ? (existing.chunkCount ?? 0) : 0,
     totalSatsPaid: isSameSession ? (existing.totalSatsPaid ?? 0) : 0,
-    budgetRemaining: isSameSession ? (existing.budgetRemaining ?? walletBalance) : walletBalance,
   });
 
   // Start media in parallel with session join
@@ -407,6 +406,10 @@ peer.onIceStateChange = (state) => {
 peer.onDataChannel = (event) => {
   const rawChannel = event.channel;
 
+  // Holds the unsubscribe function for the balance listener; set in onopen,
+  // called in onclose so the subscription does not outlive the channel.
+  let unsubscribeBalance: (() => void) | null = null;
+
   // ondatachannel fires when the channel is received but it may still be
   // in 'connecting' state. Wait for 'open' before marking ready.
   rawChannel.onopen = () => {
@@ -423,26 +426,29 @@ peer.onDataChannel = (event) => {
     const session = loadSession();
     const initialChunkId = session?.chunkCount ?? 0;
     const initialTotalSatsPaid = session?.totalSatsPaid ?? 0;
-    const budgetSats = session?.budgetRemaining ?? getBalance();
 
     // Sync nextChunkId for the DEV manual payment button.
     nextChunkId = initialChunkId;
 
-    // Show the session stats bar with the current budget
+    // Show the session stats bar with the current wallet balance.
     totalSatsPaidDisplay = initialTotalSatsPaid;
     totalChunksPaidDisplay = initialChunkId;
-    showSessionStats(budgetSats);
+    showSessionStats(getBalance());
     hidePaymentPausedBanner();
+
+    // Subscribe to wallet balance changes for reactive budget display.
+    unsubscribeBalance = onBalanceChange((balance) => {
+      updateBudgetDisplay(balance);
+    });
 
     scheduler = new PaymentScheduler(
       dataChannel,
-      mintP2PKToken,
+      swapP2PKToken,
       (proofs, url) =>
         getEncodedToken({ mint: url, proofs, unit: 'sat' }),
       {
         intervalSecs: activeIntervalSeconds,
         chunkSats: activeRateSatsPerInterval,
-        budgetSats,
         tutorPubkey,
         mintUrl,
         initialChunkId,
@@ -451,7 +457,6 @@ peer.onDataChannel = (event) => {
           updateSession({
             chunkCount: state.chunkId,
             totalSatsPaid: state.totalSatsPaid,
-            budgetRemaining: state.budgetRemaining,
           });
         },
       },
@@ -468,13 +473,15 @@ peer.onDataChannel = (event) => {
       showPaymentPausedBanner();
     });
 
-    scheduler.onChunkPaid((chunkId, totalPaid, budgetRemaining) => {
+    scheduler.onChunkPaid((chunkId, totalPaid, balance) => {
       console.log(
-        `[scheduler] chunk #${chunkId} paid — total: ${totalPaid} sats, remaining: ${budgetRemaining} sats`,
+        `[scheduler] chunk #${chunkId} paid — total: ${totalPaid} sats, balance: ${balance} sats`,
       );
       totalSatsPaidDisplay = totalPaid;
       totalChunksPaidDisplay = chunkId + 1;
-      updateBudgetDisplay(budgetRemaining);
+      // Balance display is updated reactively via onBalanceChange subscription;
+      // call updateBudgetDisplay here as a synchronous fallback.
+      updateBudgetDisplay(balance);
       triggerChunkPulse();
       hidePaymentPausedBanner();
     });
@@ -485,6 +492,10 @@ peer.onDataChannel = (event) => {
   rawChannel.onclose = () => {
     console.log('[datachannel] closed');
     setDcStatus('closed');
+    if (unsubscribeBalance !== null) {
+      unsubscribeBalance();
+      unsubscribeBalance = null;
+    }
     scheduler?.stop();
     scheduler = null;
   };

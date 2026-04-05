@@ -12,6 +12,21 @@ import type { DataChannelMessage } from '../types/data-channel.js';
 import type { Proof } from '../types/cashu.js';
 
 // ---------------------------------------------------------------------------
+// Mock wallet-store so getBalance() is controllable in tests
+// ---------------------------------------------------------------------------
+
+vi.mock('./wallet-store.js', () => ({
+  getBalance: vi.fn(() => 100),
+  spendProofs: vi.fn(),
+  addProofs: vi.fn(),
+  getProofs: vi.fn(() => []),
+  setProofs: vi.fn(),
+  onBalanceChange: vi.fn(() => () => undefined),
+}));
+
+import { getBalance } from './wallet-store.js';
+
+// ---------------------------------------------------------------------------
 // Shared mock factories
 // ---------------------------------------------------------------------------
 
@@ -76,10 +91,13 @@ const MINT_URL = 'http://localhost:3338';
 describe('PaymentScheduler', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    // Default: wallet has plenty of balance.
+    vi.mocked(getBalance).mockReturnValue(100);
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.clearAllMocks();
   });
 
   // -------------------------------------------------------------------------
@@ -93,18 +111,17 @@ describe('PaymentScheduler', () => {
     let chunkCount = 0;
     let totalPaid = 0;
 
-    const stateChanges: { chunkId: number; totalSatsPaid: number; budgetRemaining: number }[] = [];
+    const stateChanges: { chunkId: number; totalSatsPaid: number }[] = [];
 
     const scheduler = new PaymentScheduler(dc, mintToken, encodeToken, {
       intervalSecs: INTERVAL_SECS,
       chunkSats: CHUNK_SATS,
-      budgetSats: 100,
       tutorPubkey: TUTOR_PUBKEY,
       mintUrl: MINT_URL,
       onStateChange: (state) => { stateChanges.push({ ...state }); },
     });
 
-    scheduler.onChunkPaid((_chunkId, tp, _br) => {
+    scheduler.onChunkPaid((_chunkId, tp, _balance) => {
       chunkCount += 1;
       totalPaid = tp;
     });
@@ -149,7 +166,6 @@ describe('PaymentScheduler', () => {
     const scheduler = new PaymentScheduler(dc, mintToken, encodeToken, {
       intervalSecs: INTERVAL_SECS,
       chunkSats: CHUNK_SATS,
-      budgetSats: 100,
       tutorPubkey: TUTOR_PUBKEY,
       mintUrl: MINT_URL,
     });
@@ -210,7 +226,6 @@ describe('PaymentScheduler', () => {
     const scheduler = new PaymentScheduler(dc, mintToken, encodeToken, {
       intervalSecs: INTERVAL_SECS,
       chunkSats: CHUNK_SATS,
-      budgetSats: 100,
       tutorPubkey: TUTOR_PUBKEY,
       mintUrl: MINT_URL,
     });
@@ -251,11 +266,9 @@ describe('PaymentScheduler', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Test 4 — Budget exhaustion
+  // Test 4 — Budget exhaustion via getBalance()
   // -------------------------------------------------------------------------
-  it('budget exhaustion: onBudgetExhausted fires after 3 acks, no 4th token is sent', async () => {
-    const BUDGET_SATS = 3;
-
+  it('budget exhaustion: onBudgetExhausted fires when getBalance() drops below chunkSats', async () => {
     const dc = makeMockDataChannel();
     const mintToken = makeMockMintToken();
     const encodeToken = makeMockEncodeToken();
@@ -263,10 +276,12 @@ describe('PaymentScheduler', () => {
     let budgetExhaustedCount = 0;
     let chunksPaidCount = 0;
 
+    // Start with enough balance for 3 chunks.
+    vi.mocked(getBalance).mockReturnValue(3);
+
     const scheduler = new PaymentScheduler(dc, mintToken, encodeToken, {
       intervalSecs: INTERVAL_SECS,
       chunkSats: CHUNK_SATS,
-      budgetSats: BUDGET_SATS,
       tutorPubkey: TUTOR_PUBKEY,
       mintUrl: MINT_URL,
     });
@@ -276,29 +291,31 @@ describe('PaymentScheduler', () => {
 
     scheduler.start();
 
-    // Run through BUDGET_SATS / CHUNK_SATS = 3 payment cycles.
-    for (let i = 0; i < BUDGET_SATS; i++) {
+    // Run through 3 payment cycles, simulating balance decrement each time.
+    for (let i = 0; i < 3; i++) {
       await vi.advanceTimersByTimeAsync(INTERVAL_SECS * 1000);
 
       const payments = dc.sent.filter((m) => m.type === 'token_payment');
       const lastPayment = payments[payments.length - 1];
       if (lastPayment?.type === 'token_payment') {
+        // Simulate balance decreasing after each chunk is paid.
+        vi.mocked(getBalance).mockReturnValue(3 - (i + 1));
         dc.triggerMessage({ type: 'payment_ack', chunkId: lastPayment.chunkId });
       }
     }
 
     // onBudgetExhausted should have fired exactly once.
     expect(budgetExhaustedCount).toBe(1);
-    expect(chunksPaidCount).toBe(BUDGET_SATS);
+    expect(chunksPaidCount).toBe(3);
 
     // Count how many token_payment messages were sent.
     const totalSent = dc.sent.filter((m) => m.type === 'token_payment').length;
-    expect(totalSent).toBe(BUDGET_SATS); // exactly 3 — no 4th
+    expect(totalSent).toBe(3); // exactly 3 — no 4th
 
     // Advance time further to confirm no 4th token is sent.
     await vi.advanceTimersByTimeAsync(INTERVAL_SECS * 1000);
 
     const totalSentAfter = dc.sent.filter((m) => m.type === 'token_payment').length;
-    expect(totalSentAfter).toBe(BUDGET_SATS); // still 3
+    expect(totalSentAfter).toBe(3); // still 3
   });
 });
