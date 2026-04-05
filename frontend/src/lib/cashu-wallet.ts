@@ -5,8 +5,8 @@
  *
  * Wraps @cashu/cashu-ts to provide the Cashu operations needed by the
  * payment flow:
- *   - swapP2PKToken   — NUT-03 swap with NUT-11 P2PK lock (single HTTP POST, no Lightning)
- *   - redeemToken     — NUT-03 swap using NUT-11 private key signature
+ *   - preSplitProofs  — NUT-03 swap that pre-splits proofs into exact-denomination chunks
+ *   - claimProofs     — NUT-03 plain swap to claim received proofs (tutor side)
  *   - checkTokenState — NUT-07 proof state query
  *
  * The mint URL is resolved via getMintUrl() from lib/config.ts: it prefers
@@ -21,7 +21,7 @@
 import { CashuMint, CashuWallet } from '@cashu/cashu-ts';
 import type { Proof, MintKeys } from '../types/cashu.js';
 import { getMintUrl } from './config.js';
-import { spendProofs, addProofs } from './wallet-store.js';
+import { spendProofs, addProofs, getProofs } from './wallet-store.js';
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -64,79 +64,90 @@ export async function buildWallet(): Promise<{
 // ---------------------------------------------------------------------------
 
 /**
- * Swaps existing wallet proofs into NUT-11 P2PK-locked proofs for the recipient.
+ * Pre-splits wallet proofs into exact `chunkSats`-denominated proofs.
  *
- * Uses a single HTTP POST to the mint (NUT-03 swap) — no Lightning invoice,
- * no polling. Latency is ~50-200ms versus ~2-3s for a Lightning round-trip.
+ * Executes a single NUT-03 swap with `outputAmounts.sendAmounts` set to an
+ * array of `numChunks` entries each equal to `chunkSats`. This ensures every
+ * per-tick payment is a synchronous proof selection with no HTTP call.
  *
- * Flow:
- *   1. Select proofs from the local wallet covering amountSats.
- *   2. Calculate the swap fee; re-select if the first selection is too small.
- *   3. POST to the mint: returns P2PK-locked send proofs + unlocked change.
- *   4. Return change proofs to the wallet.
- *   5. On any error, roll back all consumed proofs to the wallet.
+ * The viewer pays no redemption fee — the tutor bears the fee when claiming.
  *
- * The viewer pays the tutor's future redemption fee via `includeFees: true`.
- *
- * @param amountSats      Net value the recipient will hold after redeeming.
- * @param recipientPubkey Compressed secp256k1 public key (33-byte hex, 66 chars).
- * @returns Array of P2PK-locked Proofs ready to send to the tutor.
+ * @param chunkSats    The exact denomination each payment chunk should be.
+ * @param totalBudget  The total wallet balance available for the session.
+ * @returns The number of payment chunks created.
  */
-export async function swapP2PKToken(
-  amountSats: number,
-  recipientPubkey: string
-): Promise<Proof[]> {
+export async function preSplitProofs(
+  chunkSats: number,
+  totalBudget: number
+): Promise<number> {
   const { wallet } = await buildWallet();
 
-  // Select proofs from the wallet for the requested amount.
-  let inputProofs = spendProofs(amountSats);
+  const numChunks = Math.floor(totalBudget / chunkSats);
+  if (numChunks === 0) throw new Error('Insufficient balance for even one payment chunk');
 
-  // Calculate the swap fee based on the selected inputs and re-select if
-  // the first selection is not large enough to cover amount + fee.
-  const fee = wallet.getFeesForProofs(inputProofs);
-  const totalNeeded = amountSats + fee;
-  const totalSelected = inputProofs.reduce((s, p) => s + p.amount, 0);
+  const totalAmount = numChunks * chunkSats;
 
-  if (totalSelected < totalNeeded) {
-    // Return the under-sized selection and pick a larger batch.
-    addProofs(inputProofs);
-    inputProofs = spendProofs(totalNeeded);
+  // Check if we already have enough exact-denomination proofs.
+  const existing = getProofs();
+  const exactMatch = existing.filter((p) => p.amount === chunkSats);
+  if (exactMatch.length >= numChunks) {
+    return numChunks; // Already pre-split, skip the swap.
   }
 
-  try {
-    // Swap at the mint: locked proofs go to the tutor, change comes back.
-    // includeFees: true means the viewer covers the tutor's redemption fee.
-    const result = await wallet.send(amountSats, inputProofs, {
-      p2pk: { pubkey: recipientPubkey },
-      includeFees: true,
-    });
+  // Select proofs from the wallet to cover the swap input.
+  let inputProofs = spendProofs(totalAmount);
+  const fee = wallet.getFeesForProofs(inputProofs);
 
-    // Return change to the wallet store.
-    if (result.keep.length > 0) {
-      addProofs(result.keep);
+  if (fee > 0) {
+    const inputTotal = inputProofs.reduce((s, p) => s + p.amount, 0);
+    if (inputTotal < totalAmount + fee) {
+      // Return under-sized selection and re-select with fee buffer.
+      addProofs(inputProofs);
+      const biggerInput = spendProofs(totalAmount + fee);
+      try {
+        const result = await wallet.swap(totalAmount, biggerInput, {
+          outputAmounts: {
+            sendAmounts: Array(numChunks).fill(chunkSats) as number[],
+          },
+        });
+        addProofs(result.send);
+        if (result.keep.length > 0) addProofs(result.keep);
+        return numChunks;
+      } catch (err) {
+        addProofs(biggerInput); // rollback
+        throw err;
+      }
     }
+  }
 
-    return result.send;
+  // Normal case: initial selection covers totalAmount (+ fee if any).
+  try {
+    const result = await wallet.swap(totalAmount, inputProofs, {
+      outputAmounts: {
+        sendAmounts: Array(numChunks).fill(chunkSats) as number[],
+      },
+    });
+    addProofs(result.send);
+    if (result.keep.length > 0) addProofs(result.keep);
+    return numChunks;
   } catch (err) {
-    // Rollback: put all consumed proofs back in the wallet on any failure.
-    addProofs(inputProofs);
+    addProofs(inputProofs); // rollback
     throw err;
   }
 }
 
 /**
- * Redeems P2PK-locked Cashu proofs using the holder's private key.
+ * Claims plain unlocked Cashu proofs by performing a NUT-03 swap.
  *
- * Executes a NUT-03 swap, signing each proof's secret with privkeyHex so the
- * mint's NUT-11 spending condition is satisfied.
+ * No private key or P2PK signature required — the proofs are plain unlocked
+ * tokens. The tutor calls this to convert received proofs into fresh ones.
+ * The swap fee is borne by the tutor (deducted from `receiveAmount`).
  *
- * @param proofs      The P2PK-locked proofs to redeem.
- * @param privkeyHex  Hex-encoded 32-byte private key matching the lock pubkey.
- * @returns `{ success: true }` on successful redemption.
+ * @param proofs  Plain unlocked proofs received from the viewer.
+ * @returns `{ success: true, newProofs }` on successful claim.
  */
-export async function redeemToken(
-  proofs: Proof[],
-  privkeyHex: string
+export async function claimProofs(
+  proofs: Proof[]
 ): Promise<{ success: boolean; newProofs: Proof[] }> {
   const { wallet } = await buildWallet();
 
@@ -146,19 +157,14 @@ export async function redeemToken(
 
   if (receiveAmount <= 0) {
     throw new Error(
-      `Proof total (${totalAmount}) is not enough to cover the swap fee (${fee})`
+      `Proof total (${totalAmount}) cannot cover swap fee (${fee})`
     );
   }
 
-  const swapResult = await wallet.swap(receiveAmount, proofs, {
-    privkey: privkeyHex,
-  });
+  // Plain swap — no privkey, no P2PK.
+  const swapResult = await wallet.swap(receiveAmount, proofs);
 
   const newProofs = [...swapResult.keep, ...swapResult.send];
-  if (!newProofs || newProofs.length === 0) {
-    throw new Error('swap returned empty proofs — redemption failed');
-  }
-
   return { success: true, newProofs };
 }
 

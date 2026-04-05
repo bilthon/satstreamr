@@ -1,11 +1,9 @@
-import { secp256k1 } from '@noble/curves/secp256k1.js';
-import { bytesToHex } from '@noble/curves/utils.js';
 import { getDecodedToken } from '@cashu/cashu-ts';
 import type { Proof } from '../types/cashu.js';
 import { SignalingClient } from '../signaling-client.js';
 import { PeerConnection } from '../lib/peer-connection.js';
 import { DataChannel } from '../lib/data-channel.js';
-import { checkTokenState, redeemToken, getMeltQuote, meltTokens } from '../lib/cashu-wallet.js';
+import { checkTokenState, claimProofs, getMeltQuote, meltTokens } from '../lib/cashu-wallet.js';
 import type { SignalingMessage } from '../types/signaling.js';
 import { saveSession, loadSession, clearSession } from '../lib/session-storage.js';
 import { getProofs, addProofs } from '../lib/wallet-store.js';
@@ -356,32 +354,6 @@ if (summaryCloseBtnEl !== null) {
 }
 
 // ---------------------------------------------------------------------------
-// Keypair generation (Unit 10)
-// ---------------------------------------------------------------------------
-
-const PRIVKEY_STORAGE_KEY = 'tutor_privkey';
-
-/** Generate or restore the tutor's secp256k1 keypair from sessionStorage. */
-function getOrGenerateKeypair(): { privkeyHex: string; pubkeyHex: string } {
-  const stored = sessionStorage.getItem(PRIVKEY_STORAGE_KEY);
-  if (stored !== null) {
-    const privBytes = Uint8Array.from(
-      (stored.match(/.{2}/g) ?? []).map((b) => parseInt(b, 16)),
-    );
-    const pubkeyBytes = secp256k1.getPublicKey(privBytes, true);
-    return { privkeyHex: stored, pubkeyHex: bytesToHex(pubkeyBytes) };
-  }
-  const { secretKey, publicKey } = secp256k1.keygen();
-  const privkeyHex = bytesToHex(secretKey);
-  const pubkeyHex = bytesToHex(publicKey);
-  sessionStorage.setItem(PRIVKEY_STORAGE_KEY, privkeyHex);
-  return { privkeyHex, pubkeyHex };
-}
-
-const { privkeyHex: tutorPrivkeyHex, pubkeyHex: tutorPubkeyHex } = getOrGenerateKeypair();
-console.log('[tutor] pubkey:', tutorPubkeyHex);
-
-// ---------------------------------------------------------------------------
 // Rate configuration helpers
 // ---------------------------------------------------------------------------
 
@@ -438,7 +410,6 @@ function sendCreateSession(): void {
   setStatus('connected -- creating session\u2026');
   client.send({
     type: 'create_session',
-    tutorPubkey: tutorPubkeyHex,
     mintUrl: getMintUrl(),
     rateSatsPerInterval,
     intervalSeconds,
@@ -603,9 +574,9 @@ async function handleTokenPayment(chunkId: number, encodedToken: string): Promis
     return;
   }
 
-  // 3. Redeem (NUT-03 swap with NUT-11 P2PK signature)
+  // 3. Claim proofs via plain NUT-03 swap (no P2PK signature required)
   try {
-    const { newProofs } = await redeemToken(proofs, tutorPrivkeyHex);
+    const { newProofs } = await claimProofs(proofs);
     lastSeenChunkId = chunkId;
     console.log(`[payment] ack #${chunkId}`);
     dataChannel.sendMessage({ type: 'payment_ack', chunkId });
@@ -623,7 +594,7 @@ async function handleTokenPayment(chunkId: number, encodedToken: string): Promis
     hidePaymentPausedBanner();
   } catch (err: unknown) {
     const reason = err instanceof Error ? err.message : String(err);
-    console.error(`[payment] redeemToken failed for chunk #${chunkId}:`, reason);
+    console.error(`[payment] claimProofs failed for chunk #${chunkId}:`, reason);
     dataChannel.sendMessage({ type: 'payment_nack', chunkId, reason });
   }
 }
@@ -703,7 +674,6 @@ function handleSessionCreated(id: string): void {
   const { rateSatsPerInterval, intervalSeconds } = getRateConfig();
   const inviteUrl = createInviteUrl({
     sessionId: id,
-    tutorPubkey: tutorPubkeyHex,
     rateSatsPerInterval,
     intervalSeconds,
     mintUrl: getMintUrl(),
