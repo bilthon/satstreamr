@@ -9,8 +9,9 @@
  *   - redeemToken     — NUT-03 swap using NUT-11 private key signature
  *   - checkTokenState — NUT-07 proof state query
  *
- * The mint URL is read from import.meta.env.VITE_MINT_URL — no hardcoded
- * strings in this module body.
+ * The mint URL is resolved via getMintUrl() from lib/config.ts: it prefers
+ * VITE_MINT_URL when set, otherwise uses the Vite proxy path /mint so the
+ * app works on both localhost and LAN without manual configuration.
  *
  * REGTEST NOTE: Invoice payment in mintP2PKToken uses the LND REST API
  * (proxied through Vite's dev server at /lnd-customer) to pay the invoice
@@ -21,6 +22,7 @@
 
 import { CashuMint, CashuWallet, hasValidDleq } from '@cashu/cashu-ts';
 import type { Proof, MintKeys } from '../types/cashu.js';
+import { getMintUrl } from './config.js';
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -36,17 +38,6 @@ export class DLEQVerificationError extends Error {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/** Returns the mint URL from the Vite env variable, or throws. */
-function getMintUrl(): string {
-  const url = import.meta.env['VITE_MINT_URL'];
-  if (!url) {
-    throw new Error(
-      'VITE_MINT_URL is not defined. Set it in your .env file or environment before building.'
-    );
-  }
-  return url as string;
-}
 
 /** Builds a connected, key-loaded CashuWallet for the sat unit. */
 export async function buildWallet(): Promise<{

@@ -30,6 +30,14 @@ export default defineConfig({
         secure: false,
         rewrite: (path) => path.replace(/^\/lnd-customer/, ''),
       },
+      // Proxy Cashu mint HTTP calls through the Vite HTTPS origin so that LAN
+      // devices reach the local mint without mixed-content errors and without
+      // needing to know the host machine's IP address.
+      '/mint': {
+        target: 'http://localhost:3338',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/mint/, ''),
+      },
       // Proxy signaling WebSocket through the Vite HTTPS origin so that LAN
       // devices can connect without mixed-content (wss vs ws) errors.
       '/ws': {

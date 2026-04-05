@@ -1,3 +1,5 @@
+import { getMintUrl } from './config.js';
+
 export class MintMismatchError extends Error {
   constructor(public sessionMintUrl: string, public localMintUrl: string) {
     super(`Mint mismatch. Session requires: ${sessionMintUrl}. Local: ${localMintUrl}`);
@@ -12,7 +14,7 @@ function normalize(url: string): string {
 }
 
 export function assertSameMint(sessionMintUrl: string): void {
-  const local = import.meta.env['VITE_MINT_URL'] as string;
+  const local = getMintUrl();
   if (normalize(sessionMintUrl) !== normalize(local)) {
     throw new MintMismatchError(sessionMintUrl, local);
   }
