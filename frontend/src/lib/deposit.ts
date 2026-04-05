@@ -9,28 +9,15 @@
  *   3. pollForPayment    — automates the polling loop with timeout
  *   4. mintProofsFromQuote — mints Cashu proofs once paid, stores them locally
  *
- * The mint URL is read from import.meta.env.VITE_MINT_URL — no hardcoded
- * strings in this module body.
+ * The mint URL is resolved via getMintUrl() from lib/config.ts: it prefers
+ * VITE_MINT_URL when set, otherwise uses the Vite proxy path /mint so the
+ * app works on both localhost and LAN without manual configuration.
  */
 
 import type { Proof } from '@cashu/cashu-ts';
 import { buildWallet } from './cashu-wallet.js';
 import { addProofs } from './wallet-store.js';
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-/** Returns the mint URL from the Vite env variable, or throws. */
-function getMintUrl(): string {
-  const url = import.meta.env['VITE_MINT_URL'];
-  if (!url) {
-    throw new Error(
-      'VITE_MINT_URL is not defined. Set it in your .env file or environment before building.'
-    );
-  }
-  return url as string;
-}
+import { getMintUrl } from './config.js';
 
 // ---------------------------------------------------------------------------
 // Public API

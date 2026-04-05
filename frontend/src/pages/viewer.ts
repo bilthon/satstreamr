@@ -8,6 +8,7 @@ import type { SignalingMessage } from '../types/signaling.js';
 import { saveSession, loadSession, updateSession, clearSession } from '../lib/session-storage.js';
 import { assertSameMint, MintMismatchError } from '../lib/mint-guard.js';
 import { getBalance } from '../lib/wallet-store.js';
+import { getMintUrl } from '../lib/config.js';
 
 // Derive the signaling WebSocket URL. If VITE_SIGNALING_URL is set at build
 // time it takes priority (e.g. a dedicated signaling server in production).
@@ -21,7 +22,7 @@ function getSignalingUrl(): string {
   return `${proto}//${window.location.host}/ws`;
 }
 const signalingUrl = getSignalingUrl();
-const mintUrl = (import.meta.env['VITE_MINT_URL'] as string | undefined) ?? '';
+const mintUrl = getMintUrl();
 
 // ---------------------------------------------------------------------------
 // UI element references

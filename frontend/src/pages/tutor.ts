@@ -10,6 +10,7 @@ import type { SignalingMessage } from '../types/signaling.js';
 import { saveSession, loadSession, clearSession } from '../lib/session-storage.js';
 import { getProofs, addProofs } from '../lib/wallet-store.js';
 import { createInviteUrl } from '../lib/session-invite.js';
+import { getMintUrl } from '../lib/config.js';
 
 // Derive the signaling WebSocket URL. If VITE_SIGNALING_URL is set at build
 // time it takes priority (e.g. a dedicated signaling server in production).
@@ -438,7 +439,7 @@ function sendCreateSession(): void {
   client.send({
     type: 'create_session',
     tutorPubkey: tutorPubkeyHex,
-    mintUrl: import.meta.env['VITE_MINT_URL'] as string,
+    mintUrl: getMintUrl(),
     rateSatsPerInterval,
     intervalSeconds,
   });
@@ -706,7 +707,7 @@ function handleSessionCreated(id: string): void {
     tutorPubkey: tutorPubkeyHex,
     rateSatsPerInterval,
     intervalSeconds,
-    mintUrl: (import.meta.env['VITE_MINT_URL'] as string | undefined) ?? '',
+    mintUrl: getMintUrl(),
   });
 
   if (inviteSessionIdEl !== null) {
