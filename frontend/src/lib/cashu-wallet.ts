@@ -82,9 +82,21 @@ export async function preSplitProofs(
 ): Promise<number> {
   const { wallet } = await buildWallet();
 
-  const numChunks = Math.floor(totalBudget / chunkSats);
-  if (numChunks === 0) throw new Error('Insufficient balance for even one payment chunk');
+  // Probe the fee by estimating against all available proofs.
+  // wallet.getFeesForProofs() is a pure local calculation — no network call.
+  const allProofs = getProofs();
+  const probeFee = wallet.getFeesForProofs(allProofs);
 
+  // Subtract the fee headroom before calculating how many chunks fit.
+  const spendable = totalBudget - probeFee;
+  if (spendable < chunkSats) {
+    throw new Error(
+      `Insufficient balance after fees: ${totalBudget} sats available, ` +
+      `${probeFee} sat fee, need at least ${chunkSats} sats`
+    );
+  }
+
+  const numChunks = Math.floor(spendable / chunkSats);
   const totalAmount = numChunks * chunkSats;
 
   // Check if we already have enough exact-denomination proofs.
@@ -94,33 +106,10 @@ export async function preSplitProofs(
     return numChunks; // Already pre-split, skip the swap.
   }
 
-  // Select proofs from the wallet to cover the swap input.
-  let inputProofs = spendProofs(totalAmount);
-  const fee = wallet.getFeesForProofs(inputProofs);
+  // Select inputs. The fee was already subtracted from numChunks so
+  // totalAmount + probeFee should fit within totalBudget.
+  const inputProofs = spendProofs(totalAmount + probeFee);
 
-  if (fee > 0) {
-    const inputTotal = inputProofs.reduce((s, p) => s + p.amount, 0);
-    if (inputTotal < totalAmount + fee) {
-      // Return under-sized selection and re-select with fee buffer.
-      addProofs(inputProofs);
-      const biggerInput = spendProofs(totalAmount + fee);
-      try {
-        const result = await wallet.swap(totalAmount, biggerInput, {
-          outputAmounts: {
-            sendAmounts: Array(numChunks).fill(chunkSats) as number[],
-          },
-        });
-        addProofs(result.send);
-        if (result.keep.length > 0) addProofs(result.keep);
-        return numChunks;
-      } catch (err) {
-        addProofs(biggerInput); // rollback
-        throw err;
-      }
-    }
-  }
-
-  // Normal case: initial selection covers totalAmount (+ fee if any).
   try {
     const result = await wallet.swap(totalAmount, inputProofs, {
       outputAmounts: {
