@@ -344,13 +344,14 @@ client.onConnect(() => {
   }
 
   const existing = loadSession();
+  const isSameSession = existing !== null && existing.sessionId === sessionId;
   saveSession({
     sessionId,
-    peerId: existing?.peerId ?? '',
+    peerId: isSameSession ? (existing.peerId ?? '') : '',
     role: 'viewer',
-    chunkCount: existing?.chunkCount ?? 0,
-    totalSatsPaid: existing?.totalSatsPaid ?? 0,
-    budgetRemaining: existing?.budgetRemaining ?? walletBalance,
+    chunkCount: isSameSession ? (existing.chunkCount ?? 0) : 0,
+    totalSatsPaid: isSameSession ? (existing.totalSatsPaid ?? 0) : 0,
+    budgetRemaining: isSameSession ? (existing.budgetRemaining ?? walletBalance) : walletBalance,
   });
 
   // Start media in parallel with session join

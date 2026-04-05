@@ -3,6 +3,7 @@ import { getBalance, onBalanceChange, spendProofs, addProofs } from '../lib/wall
 import { getMeltQuote, meltTokens } from '../lib/cashu-wallet.js';
 import { requestMintQuote, pollForPayment, mintProofsFromQuote } from '../lib/deposit.js';
 import { parseInvite } from '../lib/session-invite.js';
+import { clearSession } from '../lib/session-storage.js';
 
 // ---------------------------------------------------------------------------
 // UI element references
@@ -459,6 +460,7 @@ if (startStreamingBtnEl !== null) {
 // ---------------------------------------------------------------------------
 
 function navigateToViewer(sessionId: string): void {
+  clearSession();
   window.location.href = `/viewer.html?session=${encodeURIComponent(sessionId)}`;
 }
 
