@@ -636,6 +636,22 @@ client.onMessage((msg: SignalingMessage) => {
       showSessionSummary();
       break;
 
+    case 'error': {
+      const errorMsg = msg as { type: 'error'; code?: string; message?: string };
+      if (errorMsg.code === 'SESSION_NOT_FOUND') {
+        console.warn('[tutor] stale session cleared:', errorMsg.message);
+        clearSession();
+        signalingReady = true;
+        setStatus('connected -- configure rate and click Start Session');
+        if (sessionStartRequested) {
+          sendCreateSession();
+        }
+      } else {
+        console.error('[tutor] signaling error:', errorMsg.code, errorMsg.message);
+      }
+      break;
+    }
+
     default:
       break;
   }

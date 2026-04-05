@@ -451,6 +451,7 @@ if (withdrawPayBtnEl !== null) {
 
 if (startStreamingBtnEl !== null) {
   startStreamingBtnEl.addEventListener('click', () => {
+    clearSession();
     window.location.href = '/tutor.html';
   });
 }
