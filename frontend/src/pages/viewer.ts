@@ -53,7 +53,7 @@ function showMintMismatch(sessionMint: string, localMint: string): void {
 let totalSatsPaidDisplay = 0;
 let totalChunksPaidDisplay = 0;
 
-const sessionSummary = createSessionSummary();
+const sessionSummary = createSessionSummary({ statsElId: 'viewer-stats' });
 
 /** Show the session stats bar and record start time. */
 function showSessionStats(initialBudget: number): void {

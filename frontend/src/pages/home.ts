@@ -515,7 +515,7 @@ if (withdrawPayBtnEl !== null) {
 if (startStreamingBtnEl !== null) {
   startStreamingBtnEl.addEventListener('click', () => {
     clearSession();
-    window.location.href = '/tutor.html';
+    window.location.href = '/room.html';
   });
 }
 
@@ -525,7 +525,7 @@ if (startStreamingBtnEl !== null) {
 
 function navigateToViewer(sessionId: string): void {
   clearSession();
-  window.location.href = `/viewer.html?session=${encodeURIComponent(sessionId)}`;
+  window.location.href = `/room.html?session=${encodeURIComponent(sessionId)}`;
 }
 
 function showJoinError(message: string): void {

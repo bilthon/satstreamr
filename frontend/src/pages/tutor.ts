@@ -62,6 +62,7 @@ let invoiceCountdownHandle: ReturnType<typeof setInterval> | null = null;
 const sessionSummary = createSessionSummary({
   onBeforeSummary: () => { stopElapsedTimer(); },
   onAfterSummary: () => { wireCashOut(); },
+  statsElId: 'tutor-stats',
 });
 
 /** Start the elapsed timer. Called when the data channel opens. */

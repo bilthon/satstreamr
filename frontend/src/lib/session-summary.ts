@@ -3,6 +3,7 @@ import { clearSession } from './session-storage.js';
 export interface SessionSummaryConfig {
   onBeforeSummary?: () => void;
   onAfterSummary?: () => void;
+  statsElId?: string;
 }
 
 export interface SessionSummary {
@@ -22,7 +23,7 @@ export function createSessionSummary(config?: SessionSummaryConfig): SessionSumm
   const summaryChunksEl = document.getElementById('summary-chunks');
   const summaryCloseBtnEl = document.getElementById('summary-close-btn');
   const paymentPausedBannerEl = document.getElementById('payment-paused-banner');
-  const sessionStatsEl = document.getElementById('session-stats');
+  const sessionStatsEl = document.getElementById(config?.statsElId ?? 'session-stats');
 
   let sessionStartTime: number | null = null;
   let summaryShown = false;
