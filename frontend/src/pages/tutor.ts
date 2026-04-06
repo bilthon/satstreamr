@@ -9,30 +9,21 @@ import { saveSession, loadSession, clearSession } from '../lib/session-storage.j
 import { getProofs, addProofs } from '../lib/wallet-store.js';
 import { createInviteUrl } from '../lib/session-invite.js';
 import { getMintUrl } from '../lib/config.js';
+import { getSignalingUrl } from '../lib/signaling-url.js';
+import { createSessionUI } from '../lib/session-ui.js';
+import { startMedia as sharedStartMedia } from '../lib/media.js';
 
-// Derive the signaling WebSocket URL. If VITE_SIGNALING_URL is set at build
-// time it takes priority (e.g. a dedicated signaling server in production).
-// Otherwise fall back to the Vite-proxied /ws path so that the connection
-// works on any host — including LAN devices accessing the dev server over
-// HTTPS — without mixed-content (wss vs ws) errors.
-function getSignalingUrl(): string {
-  const env = import.meta.env['VITE_SIGNALING_URL'] as string | undefined;
-  if (env) return env;
-  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${proto}//${window.location.host}/ws`;
-}
 const signalingUrl = getSignalingUrl();
 
 // ---------------------------------------------------------------------------
 // UI element references
 // ---------------------------------------------------------------------------
 
-const statusEl = document.getElementById('status');
+const ui = createSessionUI('tutor');
+
 const sessionIdEl = document.getElementById('session-id');
 const sessionContainerEl = document.getElementById('session-container');
 const localVideoEl = document.getElementById('local-video') as HTMLVideoElement | null;
-const errorEl = document.getElementById('error');
-const dcStatusEl = document.getElementById('dc-status');
 
 // Rate configuration UI elements
 const rateConfigEl = document.getElementById('rate-config');
@@ -63,45 +54,6 @@ const invoiceInputEl = document.getElementById('invoice-input') as HTMLInputElem
 const invoiceCountdownEl = document.getElementById('invoice-countdown');
 const payInvoiceBtnEl = document.getElementById('pay-invoice-btn') as HTMLButtonElement | null;
 const cashoutStatusEl = document.getElementById('cashout-status');
-
-// Reconnect overlay -- inserted programmatically so it works without HTML changes
-const reconnectOverlayEl = document.createElement('div');
-reconnectOverlayEl.id = 'reconnect-overlay';
-reconnectOverlayEl.style.cssText =
-  'position:fixed;inset:0;background:rgba(0,0,0,0.6);' +
-  'color:#fff;font-size:1.5rem;align-items:center;' +
-  'justify-content:center;z-index:9999;';
-reconnectOverlayEl.style.display = 'none';
-reconnectOverlayEl.textContent = 'reconnecting\u2026';
-document.body.appendChild(reconnectOverlayEl);
-
-function showReconnectOverlay(): void {
-  reconnectOverlayEl.style.display = 'flex';
-}
-
-function hideReconnectOverlay(): void {
-  reconnectOverlayEl.style.display = 'none';
-}
-
-function setStatus(text: string): void {
-  if (statusEl !== null) {
-    statusEl.textContent = text;
-  }
-}
-
-function showError(text: string): void {
-  console.error('[tutor]', text);
-  if (errorEl !== null) {
-    errorEl.textContent = text;
-    errorEl.style.display = 'block';
-  }
-}
-
-function setDcStatus(text: string): void {
-  if (dcStatusEl !== null) {
-    dcStatusEl.textContent = `payment channel: ${text}`;
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Session UI state
@@ -407,7 +359,7 @@ const client = new SignalingClient(signalingUrl);
 /** Send the create_session message using the currently configured rate. */
 function sendCreateSession(): void {
   const { rateSatsPerInterval, intervalSeconds } = getRateConfig();
-  setStatus('connected -- creating session\u2026');
+  ui.setStatus('connected -- creating session\u2026');
   client.send({
     type: 'create_session',
     mintUrl: getMintUrl(),
@@ -417,19 +369,19 @@ function sendCreateSession(): void {
 }
 
 client.onConnect(() => {
-  hideReconnectOverlay();
+  ui.hideReconnectOverlay();
   const existing = loadSession();
   if (existing !== null) {
     // A session was previously established (e.g. SignalingClient lost its
     // in-memory sessionId but sessionStorage still has it).  Rejoin rather
     // than creating a new orphan session.
     client.setSessionId(existing.sessionId);
-    setStatus('reconnecting -- rejoining session\u2026');
+    ui.setStatus('reconnecting -- rejoining session\u2026');
     client.send({ type: 'rejoin_session', sessionId: existing.sessionId });
   } else {
     // Mark signaling as ready; session is created when the tutor clicks the button.
     signalingReady = true;
-    setStatus('connected -- configure rate and click Start Session');
+    ui.setStatus('connected -- configure rate and click Start Session');
     if (sessionStartRequested) {
       // Button was clicked before the connection was ready
       sendCreateSession();
@@ -447,25 +399,25 @@ if (startSessionBtnEl !== null) {
     if (signalingReady) {
       sendCreateSession();
     } else {
-      setStatus('connecting\u2026 session will start when ready');
+      ui.setStatus('connecting\u2026 session will start when ready');
     }
   });
 }
 
 client.onDisconnecting(() => {
-  showReconnectOverlay();
-  setStatus('reconnecting\u2026');
+  ui.showReconnectOverlay();
+  ui.setStatus('reconnecting\u2026');
 });
 
 client.onDisconnect(() => {
-  setStatus('disconnected');
+  ui.setStatus('disconnected');
 });
 
 client.onReconnected(() => {
-  hideReconnectOverlay();
+  ui.hideReconnectOverlay();
   const saved = loadSession();
   if (saved !== null) {
-    setStatus(`reconnected -- session ${saved.sessionId}`);
+    ui.setStatus(`reconnected -- session ${saved.sessionId}`);
     if (sessionIdEl !== null) {
       sessionIdEl.textContent = saved.sessionId;
     }
@@ -473,7 +425,7 @@ client.onReconnected(() => {
       sessionContainerEl.style.display = 'block';
     }
   } else {
-    setStatus('reconnected');
+    ui.setStatus('reconnected');
   }
 });
 
@@ -493,14 +445,14 @@ function setupPeerHandlers(): void {
 
   // ICE state display
   peer.onIceStateChange = (state) => {
-    setStatus(`ICE connection state: ${state}`);
+    ui.setStatus(`ICE connection state: ${state}`);
   };
 
   // Data channel -- token receipt, verify, ack/nack (Unit 10)
   peer.onDataChannel = (event) => {
     dataChannel = new DataChannel(event.channel);
     console.log('[datachannel] open');
-    setDcStatus('open');
+    ui.setDcStatus('open');
 
     // Start the elapsed timer now that the data channel is open
     startElapsedTimer();
@@ -509,7 +461,7 @@ function setupPeerHandlers(): void {
 
     event.channel.onclose = () => {
       console.log('[datachannel] closed');
-      setDcStatus('closed');
+      ui.setDcStatus('closed');
       stopElapsedTimer();
     };
 
@@ -642,7 +594,7 @@ client.onMessage((msg: SignalingMessage) => {
         console.warn('[tutor] stale session cleared:', errorMsg.message);
         clearSession();
         signalingReady = true;
-        setStatus('connected -- configure rate and click Start Session');
+        ui.setStatus('connected -- configure rate and click Start Session');
         if (sessionStartRequested) {
           sendCreateSession();
         }
@@ -720,34 +672,24 @@ function handleSessionCreated(id: string): void {
     });
   }
 
-  setStatus('session created -- waiting for viewer\u2026');
+  ui.setStatus('session created -- waiting for viewer\u2026');
 
-  void startMedia();
-}
-
-async function startMedia(): Promise<void> {
-  try {
-    localStream = await peer.initMedia();
-    if (localVideoEl !== null) {
-      localVideoEl.srcObject = localStream;
-    }
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    showError(message);
-  }
+  void sharedStartMedia(peer, localVideoEl, ui.showError).then((stream) => {
+    localStream = stream;
+  });
 }
 
 async function handleViewerJoined(): Promise<void> {
   if (sessionId === null) {
-    showError('viewer_joined received but sessionId is unknown');
+    ui.showError('viewer_joined received but sessionId is unknown');
     return;
   }
   if (localStream === null) {
-    showError('viewer_joined received but local media stream not ready');
+    ui.showError('viewer_joined received but local media stream not ready');
     return;
   }
 
-  setStatus('viewer joined -- creating offer\u2026');
+  ui.setStatus('viewer joined -- creating offer\u2026');
 
   // Close the stale peer connection and create a fresh one so that addTrack
   // does not throw "A sender already exists for the track" when a viewer
@@ -762,13 +704,13 @@ async function handleViewerJoined(): Promise<void> {
     // Create the payment data channel BEFORE createOffer() so it is negotiated
     // in the initial SDP exchange and no renegotiation is required.
     peer.createPaymentChannel();
-    setDcStatus('connecting\u2026');
+    ui.setDcStatus('connecting\u2026');
 
     const offer = await peer.createOffer(localStream);
     client.send({ type: 'offer', sessionId, sdp: offer });
-    setStatus('offer sent -- waiting for answer\u2026');
+    ui.setStatus('offer sent -- waiting for answer\u2026');
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    showError(`Failed to create offer: ${message}`);
+    ui.showError(`Failed to create offer: ${message}`);
   }
 }

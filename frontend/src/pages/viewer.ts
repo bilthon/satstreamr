@@ -9,18 +9,10 @@ import { saveSession, loadSession, updateSession, clearSession } from '../lib/se
 import { assertSameMint, MintMismatchError } from '../lib/mint-guard.js';
 import { getBalance, onBalanceChange, spendProofs } from '../lib/wallet-store.js';
 import { getMintUrl } from '../lib/config.js';
+import { getSignalingUrl } from '../lib/signaling-url.js';
+import { createSessionUI } from '../lib/session-ui.js';
+import { startMedia as sharedStartMedia } from '../lib/media.js';
 
-// Derive the signaling WebSocket URL. If VITE_SIGNALING_URL is set at build
-// time it takes priority (e.g. a dedicated signaling server in production).
-// Otherwise fall back to the Vite-proxied /ws path so that the connection
-// works on any host — including LAN devices accessing the dev server over
-// HTTPS — without mixed-content (wss vs ws) errors.
-function getSignalingUrl(): string {
-  const env = import.meta.env['VITE_SIGNALING_URL'] as string | undefined;
-  if (env) return env;
-  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${proto}//${window.location.host}/ws`;
-}
 const signalingUrl = getSignalingUrl();
 const mintUrl = getMintUrl();
 
@@ -28,12 +20,11 @@ const mintUrl = getMintUrl();
 // UI element references
 // ---------------------------------------------------------------------------
 
-const statusEl = document.getElementById('status');
+const ui = createSessionUI('viewer');
+
 const localVideoEl = document.getElementById('local-video') as HTMLVideoElement | null;
 const remoteVideoEl = document.getElementById('remote-video') as HTMLVideoElement | null;
-const errorEl = document.getElementById('error');
 const sessionDisplayEl = document.getElementById('session-display');
-const dcStatusEl = document.getElementById('dc-status');
 
 // Session UI elements
 const sessionStatsEl = document.getElementById('session-stats');
@@ -57,45 +48,6 @@ function showMintMismatch(sessionMint: string, localMint: string): void {
   if (localMintUrlEl !== null) localMintUrlEl.textContent = localMint;
   if (mintMismatchOverlayEl !== null) {
     mintMismatchOverlayEl.classList.remove('hidden');
-  }
-}
-
-// Reconnect overlay -- inserted programmatically so it works without HTML changes
-const reconnectOverlayEl = document.createElement('div');
-reconnectOverlayEl.id = 'reconnect-overlay';
-reconnectOverlayEl.style.cssText =
-  'position:fixed;inset:0;background:rgba(0,0,0,0.6);' +
-  'color:#fff;font-size:1.5rem;align-items:center;' +
-  'justify-content:center;z-index:9999;';
-reconnectOverlayEl.style.display = 'none';
-reconnectOverlayEl.textContent = 'reconnecting\u2026';
-document.body.appendChild(reconnectOverlayEl);
-
-function showReconnectOverlay(): void {
-  reconnectOverlayEl.style.display = 'flex';
-}
-
-function hideReconnectOverlay(): void {
-  reconnectOverlayEl.style.display = 'none';
-}
-
-function setStatus(text: string): void {
-  if (statusEl !== null) {
-    statusEl.textContent = text;
-  }
-}
-
-function showError(text: string): void {
-  console.error('[viewer]', text);
-  if (errorEl !== null) {
-    errorEl.textContent = text;
-    errorEl.style.display = 'block';
-  }
-}
-
-function setDcStatus(text: string): void {
-  if (dcStatusEl !== null) {
-    dcStatusEl.textContent = `payment channel: ${text}`;
   }
 }
 
@@ -283,7 +235,7 @@ if (import.meta.env.DEV) {
 
 async function handleDevPayment(): Promise<void> {
   if (dataChannel === null || !dataChannel.isOpen) {
-    showError('[DEV] data channel is not open');
+    ui.showError('[DEV] data channel is not open');
     return;
   }
 
@@ -304,7 +256,7 @@ async function handleDevPayment(): Promise<void> {
     console.log(`[payment] sent chunk #${chunkId}`);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    showError(`[DEV] payment failed: ${message}`);
+    ui.showError(`[DEV] payment failed: ${message}`);
   }
 }
 
@@ -315,14 +267,14 @@ async function handleDevPayment(): Promise<void> {
 const client = new SignalingClient(signalingUrl);
 
 client.onConnect(() => {
-  hideReconnectOverlay();
+  ui.hideReconnectOverlay();
   if (sessionId === null) {
-    showError('No session ID found in URL. Add ?session=<id> to the URL.');
-    setStatus('error -- no session ID');
+    ui.showError('No session ID found in URL. Add ?session=<id> to the URL.');
+    ui.setStatus('error -- no session ID');
     return;
   }
 
-  setStatus('connected -- joining session\u2026');
+  ui.setStatus('connected -- joining session\u2026');
   client.send({ type: 'join_session', sessionId });
 
   // Persist session state for reconnect recovery
@@ -347,31 +299,36 @@ client.onConnect(() => {
   });
 
   // Start media in parallel with session join
-  void startMedia();
+  void sharedStartMedia(peer, localVideoEl, ui.showError).then((stream) => {
+    localStream = stream;
+    if (stream !== null) {
+      console.log('[viewer] local media ready');
+    }
+  });
 });
 
 client.onDisconnecting(() => {
-  showReconnectOverlay();
-  setStatus('reconnecting\u2026');
+  ui.showReconnectOverlay();
+  ui.setStatus('reconnecting\u2026');
   // Pause the scheduler while the signaling connection is down.
   scheduler?.stop();
 });
 
 client.onDisconnect(() => {
-  setStatus('disconnected');
+  ui.setStatus('disconnected');
   scheduler?.stop();
 });
 
 client.onReconnected(() => {
-  hideReconnectOverlay();
+  ui.hideReconnectOverlay();
   const saved = loadSession();
   if (saved !== null) {
-    setStatus(`reconnected -- session ${saved.sessionId}`);
+    ui.setStatus(`reconnected -- session ${saved.sessionId}`);
     if (sessionDisplayEl !== null) {
       sessionDisplayEl.textContent = `Session: ${saved.sessionId}`;
     }
   } else {
-    setStatus('reconnected');
+    ui.setStatus('reconnected');
   }
 });
 
@@ -388,7 +345,7 @@ function setupPeerHandlers(): void {
 
   // ICE state display
   peer.onIceStateChange = (state) => {
-    setStatus(`ICE connection state: ${state}`);
+    ui.setStatus(`ICE connection state: ${state}`);
   };
 
   // Data channel
@@ -404,7 +361,7 @@ function setupPeerHandlers(): void {
     rawChannel.onopen = () => {
       dataChannel = new DataChannel(rawChannel);
       console.log('[datachannel] open');
-      setDcStatus('open');
+      ui.setDcStatus('open');
 
       // Load persisted state so the scheduler survives page reloads.
       const session = loadSession();
@@ -446,7 +403,7 @@ function setupPeerHandlers(): void {
       );
 
       scheduler.onBudgetExhausted(() => {
-        showError('Budget exhausted \u2014 session ended');
+        ui.showError('Budget exhausted \u2014 session ended');
         scheduler.stop();
         peer.close();
         if (localStream !== null) {
@@ -457,7 +414,7 @@ function setupPeerHandlers(): void {
       });
 
       scheduler.onPaymentFailure((reason) => {
-        showError(`Payment failed \u2014 session paused: ${reason}`);
+        ui.showError(`Payment failed \u2014 session paused: ${reason}`);
         showPaymentPausedBanner();
       });
 
@@ -479,7 +436,7 @@ function setupPeerHandlers(): void {
 
     rawChannel.onclose = () => {
       console.log('[datachannel] closed');
-      setDcStatus('closed');
+      ui.setDcStatus('closed');
       if (unsubscribeBalance !== null) {
         unsubscribeBalance();
         unsubscribeBalance = null;
@@ -527,13 +484,13 @@ client.onMessage((msg: SignalingMessage) => {
       }
       console.log('[viewer] rate config:', activeRateSatsPerInterval, 'sats /', activeIntervalSeconds, 's');
       // Pre-split proofs into exact-denomination chunks before the session starts.
-      setStatus('preparing wallet\u2026');
+      ui.setStatus('preparing wallet\u2026');
       void preSplitProofs(activeRateSatsPerInterval, getBalance()).then((numChunks) => {
         console.log(`[viewer] pre-split complete: ${numChunks} chunks of ${activeRateSatsPerInterval} sats`);
-        setStatus('wallet ready — waiting for tutor\u2026');
+        ui.setStatus('wallet ready — waiting for tutor\u2026');
       }).catch((err: unknown) => {
         const reason = err instanceof Error ? err.message : String(err);
-        showError(`Pre-split failed: ${reason}`);
+        ui.showError(`Pre-split failed: ${reason}`);
       });
       break;
 
@@ -550,7 +507,7 @@ client.onMessage((msg: SignalingMessage) => {
       break;
 
     case 'error':
-      showError(`Signaling error: ${msg.code}${msg.message !== undefined ? ' -- ' + msg.message : ''}`);
+      ui.showError(`Signaling error: ${msg.code}${msg.message !== undefined ? ' -- ' + msg.message : ''}`);
       break;
 
     case 'end_session':
@@ -571,37 +528,24 @@ client.onMessage((msg: SignalingMessage) => {
 // Handlers
 // ---------------------------------------------------------------------------
 
-async function startMedia(): Promise<void> {
-  try {
-    localStream = await peer.initMedia();
-    if (localVideoEl !== null) {
-      localVideoEl.srcObject = localStream;
-    }
-    console.log('[viewer] local media ready');
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    showError(message);
-  }
-}
-
 async function handleOffer(offer: RTCSessionDescriptionInit): Promise<void> {
   if (sessionId === null) {
-    showError('Offer received but no sessionId');
+    ui.showError('Offer received but no sessionId');
     return;
   }
 
   // Wait for local media if not yet available
   if (localStream === null) {
-    setStatus('offer received -- waiting for local media\u2026');
+    ui.setStatus('offer received -- waiting for local media\u2026');
     await waitForLocalStream();
   }
 
   if (localStream === null) {
-    showError('Local media stream unavailable -- cannot answer offer');
+    ui.showError('Local media stream unavailable -- cannot answer offer');
     return;
   }
 
-  setStatus('offer received -- creating answer\u2026');
+  ui.setStatus('offer received -- creating answer\u2026');
 
   // Recreate peer connection for renegotiation (tutor may have reconnected).
   peer.close();
@@ -615,10 +559,10 @@ async function handleOffer(offer: RTCSessionDescriptionInit): Promise<void> {
   try {
     const answer = await peer.handleOffer(offer, localStream);
     client.send({ type: 'answer', sessionId, sdp: answer });
-    setStatus('answer sent -- waiting for ICE\u2026');
+    ui.setStatus('answer sent -- waiting for ICE\u2026');
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    showError(`Failed to handle offer: ${message}`);
+    ui.showError(`Failed to handle offer: ${message}`);
   }
 }
 
