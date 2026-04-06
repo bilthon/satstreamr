@@ -839,6 +839,86 @@ html {
 }
 
 /* ------------------------------------------------------------
+   Go Live ceremony overlay
+   ------------------------------------------------------------ */
+
+@keyframes go-live-pop {
+  0%   { opacity: 0; transform: scale(0.4); }
+  50%  { opacity: 1; transform: scale(1.15); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes go-live-label-in {
+  0%   { opacity: 0; transform: translateY(12px) scale(0.9); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes go-live-fade-out {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+#go-live-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 25000;
+  background: rgba(5, 7, 15, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  align-items: center;
+  justify-content: center;
+}
+
+#go-live-overlay.visible {
+  display: flex;
+}
+
+#go-live-overlay.fade-out {
+  animation: go-live-fade-out var(--duration-slow) var(--ease-out) forwards;
+}
+
+#go-live-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+#go-live-count {
+  font-family: var(--font-mono);
+  font-size: 6rem;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  line-height: 1;
+  min-height: 7rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#go-live-count .count-digit {
+  animation: go-live-pop 500ms var(--ease-spring) both;
+}
+
+#go-live-label {
+  font-family: var(--font-ui);
+  font-size: var(--text-3xl);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  background: var(--gradient-brand);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  opacity: 0;
+}
+
+#go-live-label.visible {
+  animation: go-live-label-in var(--duration-normal) var(--ease-spring) both;
+}
+
+/* ------------------------------------------------------------
    Reduced motion
    ------------------------------------------------------------ */
 

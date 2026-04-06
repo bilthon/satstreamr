@@ -48,6 +48,11 @@ const copyInviteBtnEl = document.getElementById('copy-invite-btn') as HTMLButton
 // Exit session button
 const exitSessionBtnEl = document.getElementById('exit-session-btn') as HTMLButtonElement | null;
 
+// Go Live ceremony overlay
+const goLiveOverlayEl = document.getElementById('go-live-overlay');
+const goLiveCountEl = document.getElementById('go-live-count');
+const goLiveLabelEl = document.getElementById('go-live-label');
+
 // Cash-out UI elements
 const invoiceInputEl = document.getElementById('invoice-input') as HTMLInputElement | null;
 const invoiceCountdownEl = document.getElementById('invoice-countdown');
@@ -116,6 +121,53 @@ function highlightSatsReceived(): void {
   satsReceivedEl.classList.remove('payment-highlight');
   void satsReceivedEl.offsetWidth; // force reflow to restart animation
   satsReceivedEl.classList.add('payment-highlight');
+}
+
+/**
+ * Play the "3… 2… 1… GO LIVE" countdown ceremony.
+ * Returns a promise that resolves when the ceremony finishes.
+ */
+function playGoLiveCeremony(): Promise<void> {
+  return new Promise((resolve) => {
+    if (goLiveOverlayEl === null || goLiveCountEl === null || goLiveLabelEl === null) {
+      resolve();
+      return;
+    }
+
+    goLiveOverlayEl.classList.add('visible');
+    goLiveLabelEl.classList.remove('visible');
+
+    const steps = [3, 2, 1];
+    let i = 0;
+
+    function showNext(): void {
+      if (i < steps.length) {
+        goLiveCountEl!.innerHTML = `<span class="count-digit">${steps[i]}</span>`;
+        i++;
+        setTimeout(showNext, 700);
+      } else {
+        // Clear the number and show "GO LIVE"
+        goLiveCountEl!.textContent = '';
+        goLiveLabelEl!.classList.add('visible');
+
+        // Fade out after a beat
+        setTimeout(() => {
+          goLiveOverlayEl!.classList.add('fade-out');
+          goLiveOverlayEl!.addEventListener('animationend', () => {
+            goLiveOverlayEl!.classList.remove('visible', 'fade-out');
+            resolve();
+          }, { once: true });
+          // Fallback in case animationend doesn't fire
+          setTimeout(() => {
+            goLiveOverlayEl!.classList.remove('visible', 'fade-out');
+            resolve();
+          }, 500);
+        }, 800);
+      }
+    }
+
+    showNext();
+  });
 }
 
 /** Clear the invoice countdown timer. */
@@ -676,7 +728,7 @@ function handleSessionCreated(id: string): void {
     totalSatsPaid: 0,
   });
 
-  // Build and display the invite using the configured rate
+  // Build the invite URL while the ceremony plays
   const { rateSatsPerInterval, intervalSeconds } = getRateConfig();
   const inviteUrl = createInviteUrl({
     sessionId: id,
@@ -685,36 +737,40 @@ function handleSessionCreated(id: string): void {
     mintUrl: getMintUrl(),
   });
 
-  if (inviteSessionIdEl !== null) {
-    inviteSessionIdEl.textContent = id;
-  }
-  if (inviteUrlEl !== null) {
-    inviteUrlEl.textContent = inviteUrl;
-  }
-  if (inviteSectionEl !== null) {
-    inviteSectionEl.style.display = 'block';
-  }
-  if (exitSessionBtnEl !== null) exitSessionBtnEl.style.display = 'inline-block';
-
-  if (copyInviteBtnEl !== null) {
-    copyInviteBtnEl.addEventListener('click', () => {
-      navigator.clipboard.writeText(inviteUrl).then(() => {
-        if (copyInviteBtnEl === null) return;
-        const original = copyInviteBtnEl.textContent;
-        copyInviteBtnEl.textContent = 'Copied!';
-        setTimeout(() => {
-          copyInviteBtnEl.textContent = original;
-        }, 1800);
-      }).catch((err: unknown) => {
-        console.error('[invite] clipboard write failed', err);
-      });
-    });
-  }
-
-  ui.setStatus('session created -- waiting for viewer\u2026');
-
+  // Start media in parallel with the ceremony
   void sharedStartMedia(peer, localVideoEl, ui.showError).then((stream) => {
     localStream = stream;
+  });
+
+  // Play the Go Live ceremony, then reveal the session UI
+  void playGoLiveCeremony().then(() => {
+    if (inviteSessionIdEl !== null) {
+      inviteSessionIdEl.textContent = id;
+    }
+    if (inviteUrlEl !== null) {
+      inviteUrlEl.textContent = inviteUrl;
+    }
+    if (inviteSectionEl !== null) {
+      inviteSectionEl.style.display = 'block';
+    }
+    if (exitSessionBtnEl !== null) exitSessionBtnEl.style.display = 'inline-block';
+
+    if (copyInviteBtnEl !== null) {
+      copyInviteBtnEl.addEventListener('click', () => {
+        navigator.clipboard.writeText(inviteUrl).then(() => {
+          if (copyInviteBtnEl === null) return;
+          const original = copyInviteBtnEl.textContent;
+          copyInviteBtnEl.textContent = 'Copied!';
+          setTimeout(() => {
+            copyInviteBtnEl.textContent = original;
+          }, 1800);
+        }).catch((err: unknown) => {
+          console.error('[invite] clipboard write failed', err);
+        });
+      });
+    }
+
+    ui.setStatus('session created -- waiting for viewer\u2026');
   });
 }
 
