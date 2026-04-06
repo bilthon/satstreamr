@@ -1,5 +1,5 @@
 /* ============================================================
-   session.css — Session UI styles for satstreamr
+   session.css — Session UI styles for satstreamr (dark theme)
    Covers:
      - Room page base styles
      - Pulse animation for chunk payment indicator
@@ -11,18 +11,19 @@
      - Payment paused banner
    ============================================================ */
 
+@import './design-tokens.css';
+
 /* ------------------------------------------------------------
-   Sat symbol font
+   Global reset
    ------------------------------------------------------------ */
 
-@font-face {
-  font-family: 'Satoshi Symbol';
-  src: url('/fonts/SatoshiSymbol.otf') format('opentype');
-  font-display: swap;
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
 }
 
-.sat {
-  font-family: 'Satoshi Symbol', sans-serif;
+html {
+  -webkit-font-smoothing: antialiased;
 }
 
 /* ------------------------------------------------------------
@@ -30,8 +31,21 @@
    ------------------------------------------------------------ */
 
 @keyframes chunk-pulse {
-  0%   { opacity: 1; transform: scale(1.4); background-color: #22c55e; }
-  100% { opacity: 0; transform: scale(1); background-color: #86efac; }
+  0% {
+    opacity: 1;
+    transform: scale(1.6);
+    background-color: var(--color-pulse);
+    box-shadow: 0 0 0 0 rgba(16, 217, 160, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(16, 217, 160, 0);
+  }
+  100% {
+    opacity: 0.4;
+    transform: scale(1);
+    background-color: rgba(16, 217, 160, 0.5);
+    box-shadow: 0 0 0 0 rgba(16, 217, 160, 0);
+  }
 }
 
 #chunk-indicator {
@@ -39,15 +53,15 @@
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background-color: #86efac;
-  margin-left: 0.5rem;
+  background-color: rgba(16, 217, 160, 0.5);
+  margin-left: var(--space-2);
   vertical-align: middle;
   opacity: 0.4;
-  transition: opacity 0.1s ease;
+  transition: opacity var(--duration-fast) ease;
 }
 
 #chunk-indicator.pulse {
-  animation: chunk-pulse 500ms ease-out forwards;
+  animation: chunk-pulse 600ms ease-out forwards;
 }
 
 /* ------------------------------------------------------------
@@ -56,44 +70,51 @@
 
 #tutor-stats,
 #viewer-stats {
-  /* display is toggled to flex by JS; see also .room-body overrides below */
-  gap: 2rem;
+  gap: var(--space-8);
   align-items: center;
-  margin: 0.75rem 0;
-  padding: 0.6rem 1rem;
-  background: #f0f4ff;
-  border-radius: 6px;
-  font-size: 0.95rem;
+  margin: var(--space-3) 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
   flex-wrap: wrap;
+  box-shadow: var(--shadow-card);
 }
 
 #tutor-stats .stat-label,
 #viewer-stats .stat-label {
-  font-size: 0.8rem;
-  color: #6b7280;
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
   display: block;
   margin-bottom: 0.1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 #tutor-stats .stat-value,
 #viewer-stats .stat-value {
   font-size: 1.25rem;
-  font-weight: bold;
-  font-family: monospace;
-  color: #1a1a2e;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--color-text-accent);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Larger display for remaining budget on viewer side */
 #budget-display {
-  font-size: 2.5rem;
-  font-weight: bold;
-  font-family: monospace;
-  color: #1a1a2e;
+  font-size: var(--text-4xl);
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--color-pulse);
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 #budget-display.low {
-  color: #dc2626;
+  color: var(--color-error);
 }
 
 /* ------------------------------------------------------------
@@ -104,15 +125,16 @@
   display: none;
   width: 100%;
   box-sizing: border-box;
-  padding: 0.75rem 1rem;
-  background: #fef3c7;
-  border: 1px solid #f59e0b;
-  border-radius: 4px;
-  color: #92400e;
+  padding: var(--space-3) var(--space-4);
+  background: rgba(240, 196, 25, 0.08);
+  border: 1px solid rgba(240, 196, 25, 0.25);
+  border-left: 3px solid var(--color-warning);
+  border-radius: var(--radius-sm);
+  color: var(--color-warning);
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: var(--text-sm);
   text-align: center;
-  margin: 0.5rem 0;
+  margin: var(--space-2) 0;
 }
 
 #payment-paused-banner.visible {
@@ -123,12 +145,25 @@
    Session-end summary overlay
    ------------------------------------------------------------ */
 
+@keyframes summary-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 #session-summary-overlay {
   display: none;
   position: fixed;
   inset: 0;
   z-index: 10000;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(5, 7, 15, 0.88);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   align-items: center;
   justify-content: center;
 }
@@ -138,28 +173,43 @@
 }
 
 #session-summary-card {
-  background: #ffffff;
-  border-radius: 8px;
+  position: relative;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-xl);
   padding: 2rem 2.5rem;
   max-width: 420px;
   width: 90%;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-modal);
   text-align: center;
+  overflow: hidden;
+  animation: summary-slide-up var(--duration-slow) var(--ease-out) both;
+}
+
+#session-summary-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--gradient-brand);
 }
 
 #session-summary-card h2 {
   margin: 0 0 1.25rem;
-  font-size: 1.5rem;
-  color: #1a1a2e;
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  color: var(--color-text-primary);
 }
 
 #session-summary-card .summary-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid #e5e7eb;
-  font-size: 1rem;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+  font-size: var(--text-base);
 }
 
 #session-summary-card .summary-row:last-of-type {
@@ -167,77 +217,85 @@
 }
 
 #session-summary-card .summary-row .label {
-  color: #555;
+  color: var(--color-text-secondary);
 }
 
 #session-summary-card .summary-row .value {
-  font-weight: bold;
-  font-family: monospace;
-  color: #1a1a2e;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--color-text-accent);
   font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
 }
 
 #session-summary-card #summary-close-btn {
-  margin-top: 1.5rem;
-  padding: 0.6rem 1.75rem;
-  background: #3b82f6;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  font-size: 1rem;
+  margin-top: var(--space-6);
+  padding: var(--space-2) 1.75rem;
+  background: transparent;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
   cursor: pointer;
   font-weight: 600;
-  transition: background 0.15s ease;
+  transition: border-color var(--duration-fast) ease, color var(--duration-fast) ease, background var(--duration-fast) ease;
 }
 
 #session-summary-card #summary-close-btn:hover {
-  background: #2563eb;
+  color: var(--color-text-primary);
+  border-color: var(--color-border-default);
+  background: var(--color-bg-overlay);
 }
 
 /* ------------------------------------------------------------
-   Cash-out section (Unit 16)
+   Cash-out section
    ------------------------------------------------------------ */
 
 #cashout-section {
-  margin-top: 1.5rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid #e5e7eb;
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border-subtle);
   text-align: left;
 }
 
 #cashout-section h3 {
-  margin: 0 0 0.75rem;
-  font-size: 1rem;
-  color: #1a1a2e;
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-base);
+  color: var(--color-success);
+  font-weight: 700;
 }
 
 #invoice-input-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-3);
 }
 
 #invoice-input {
   flex: 1;
   min-width: 0;
   padding: 0.45rem 0.65rem;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 0.8rem;
-  color: #1a1a2e;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  transition: border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
 }
 
 #invoice-input:focus {
-  outline: 2px solid #3b82f6;
-  outline-offset: 1px;
+  outline: none;
+  border-color: rgba(16, 217, 160, 0.5);
+  box-shadow: 0 0 0 3px rgba(16, 217, 160, 0.12);
 }
 
 #invoice-countdown {
-  font-size: 0.85rem;
-  font-family: monospace;
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
   white-space: nowrap;
   min-width: 3.5rem;
   text-align: right;
@@ -246,42 +304,49 @@
 #pay-invoice-btn {
   display: block;
   width: 100%;
-  padding: 0.55rem 1rem;
-  background: #16a34a;
+  padding: var(--space-2) var(--space-4);
+  background: linear-gradient(135deg, var(--color-success) 0%, #0db37a 100%);
   color: #fff;
   border: none;
-  border-radius: 4px;
-  font-size: 0.95rem;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s ease;
+  font-family: var(--font-ui);
+  transition: filter var(--duration-fast) ease, transform var(--duration-fast) ease;
 }
 
 #pay-invoice-btn:hover:not(:disabled) {
-  background: #15803d;
+  filter: brightness(1.15);
+  transform: translateY(-1px);
 }
 
 #pay-invoice-btn:disabled {
-  background: #9ca3af;
+  opacity: 0.35;
   cursor: not-allowed;
+  filter: none;
+  transform: none;
 }
 
 #cashout-status {
-  margin-top: 0.6rem;
+  margin-top: var(--space-2);
   font-size: 0.88rem;
+  color: var(--color-text-secondary);
   word-break: break-all;
   min-height: 1.2em;
 }
 
 /* ------------------------------------------------------------
-   Mint mismatch blocking overlay (Unit 18)
+   Mint mismatch blocking overlay
    ------------------------------------------------------------ */
 
 #mint-mismatch-overlay {
   position: fixed;
   inset: 0;
   z-index: 20000;
-  background: rgba(180, 0, 0, 0.72);
+  background: rgba(30, 5, 5, 0.92);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -292,36 +357,39 @@
 }
 
 .mint-mismatch-card {
-  background: #ffffff;
-  border-radius: 8px;
+  background: var(--color-bg-elevated);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-lg);
   padding: 2rem 2.5rem;
   max-width: 480px;
   width: 90%;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-modal);
   text-align: center;
 }
 
 .mint-mismatch-card h2 {
-  margin: 0 0 1rem;
-  font-size: 1.5rem;
-  color: #b91c1c;
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-2xl);
+  color: var(--color-error);
+  font-weight: 700;
 }
 
 .mint-mismatch-card p {
-  margin: 0.6rem 0;
-  font-size: 0.95rem;
-  color: #374151;
+  margin: var(--space-2) 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
   word-break: break-all;
 }
 
 .mint-mismatch-card code {
   display: inline-block;
-  background: #f3f4f6;
-  border-radius: 3px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-accent);
+  border-radius: var(--radius-sm);
   padding: 0.1rem 0.35rem;
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-size: 0.9em;
-  color: #1a1a2e;
+  color: var(--color-text-accent);
   word-break: break-all;
 }
 
@@ -333,20 +401,27 @@
    Base page
    ------------------------------------------------------------ */
 
-*, *::before, *::after { box-sizing: border-box; }
-
 .room-body {
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: var(--font-ui);
   max-width: 960px;
   margin: 2rem auto;
-  padding: 0 1.5rem;
-  color: #1a1a2e;
-  background: #fff;
+  padding: 0 var(--space-6);
+  color: var(--color-text-primary);
+  background: var(--color-bg-base);
+  min-height: 100vh;
+  background-image:
+    radial-gradient(ellipse 80% 60% at 0% 0%, rgba(247,147,26,0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 100% 100%, rgba(124,58,237,0.07) 0%, transparent 50%);
 }
 
 .room-body h1 {
   font-size: 1.75rem;
+  font-weight: 800;
   margin: 0 0 0.25rem;
+  background: var(--gradient-brand);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 /* ------------------------------------------------------------
@@ -354,14 +429,14 @@
    ------------------------------------------------------------ */
 
 .status-bar {
-  font-size: 0.85rem;
-  color: #6b7280;
-  margin: 0.5rem 0 1.25rem;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: var(--space-2) 0 1.25rem;
 }
 
 .status-bar .status-sep {
   margin: 0 0.4rem;
-  color: #d1d5db;
+  color: var(--color-text-muted);
 }
 
 /* ------------------------------------------------------------
@@ -369,22 +444,24 @@
    ------------------------------------------------------------ */
 
 .rate-config-card {
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  padding: 1.25rem 1.5rem;
+  background: var(--glass-bg);
+  border: 1px solid var(--color-border-subtle);
+  border-left: 3px solid var(--color-electric);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem var(--space-6);
   margin-bottom: 1.25rem;
-  background: #f9fafb;
 }
 
 .rate-config-card h2 {
-  font-size: 1.1rem;
-  margin: 0 0 0.75rem;
-  color: #1a1a2e;
+  font-size: var(--text-lg);
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-primary);
+  font-weight: 600;
 }
 
 .rate-config-row {
   display: flex;
-  gap: 1.5rem;
+  gap: var(--space-6);
   flex-wrap: wrap;
   align-items: flex-end;
 }
@@ -393,26 +470,40 @@
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  font-size: 0.875rem;
-  color: #374151;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
 }
 
 .rate-config-input {
   width: 6rem;
-  padding: 0.35rem 0.5rem;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  font-size: 1rem;
+  padding: 0.35rem var(--space-2);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-base);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+  transition: border-color var(--duration-fast) ease, box-shadow var(--duration-fast) ease;
+}
+
+.rate-config-input:focus {
+  outline: none;
+  border-color: rgba(124, 58, 237, 0.5);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
 }
 
 #start-session-btn {
-  margin-top: 1rem;
+  margin-top: var(--space-4);
 }
 
 .effective-rate {
-  font-size: 0.9rem;
-  color: #6b7280;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
   padding-bottom: 0.35rem;
+}
+
+.effective-rate strong {
+  color: var(--color-text-accent);
 }
 
 /* Fee overhead display */
@@ -420,13 +511,13 @@
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.85rem;
-  color: #6b7280;
-  margin-top: 0.5rem;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin-top: var(--space-2);
 }
 
 .fee-overhead .warn {
-  color: #dc2626;
+  color: var(--color-error);
   font-weight: 600;
 }
 
@@ -437,9 +528,9 @@
   width: 1.25rem;
   height: 1.25rem;
   border-radius: 50%;
-  border: 1px solid #9ca3af;
-  background: #fff;
-  color: #6b7280;
+  border: 1px solid var(--color-text-secondary);
+  background: transparent;
+  color: var(--color-text-secondary);
   font-size: 0.7rem;
   font-weight: 700;
   font-style: italic;
@@ -447,24 +538,24 @@
   cursor: pointer;
   padding: 0;
   line-height: 1;
-  transition: border-color 0.15s ease, color 0.15s ease;
+  transition: border-color var(--duration-fast) ease, color var(--duration-fast) ease;
 }
 
 .info-icon-btn:hover {
-  border-color: #374151;
-  color: #374151;
+  border-color: var(--color-text-primary);
+  color: var(--color-text-primary);
 }
 
 .fee-info-panel {
   display: none;
-  font-size: 0.82rem;
-  color: #555;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 4px;
-  padding: 0.6rem 0.8rem;
-  margin-top: 0.5rem;
-  line-height: 1.5;
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) 0.8rem;
+  margin-top: var(--space-2);
+  line-height: 1.6;
 }
 
 .fee-info-panel.open {
@@ -476,46 +567,48 @@
    ------------------------------------------------------------ */
 
 .invite-card {
-  border: 1px solid #38bdf8;
-  border-radius: 6px;
-  padding: 1.25rem 1.5rem;
+  background: var(--glass-bg);
+  border: 1px solid var(--color-border-subtle);
+  border-top: 2px solid var(--color-pulse);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem var(--space-6);
   margin-bottom: 1.25rem;
-  background: #f0f9ff;
 }
 
 .invite-card h2 {
-  font-size: 1.1rem;
-  margin: 0 0 0.75rem;
-  color: #0369a1;
+  font-size: var(--text-lg);
+  margin: 0 0 var(--space-3);
+  color: var(--color-pulse);
+  font-weight: 600;
 }
 
 .invite-card .invite-label {
-  font-size: 0.85rem;
-  color: #555;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
   margin: 0 0 0.4rem;
 }
 
 .invite-card .invite-code {
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-size: 2rem;
-  font-weight: bold;
+  font-weight: 700;
   letter-spacing: 0.1em;
-  color: #1a1a2e;
+  color: var(--color-text-primary);
   word-break: break-all;
-  margin-bottom: 1rem;
+  margin-bottom: var(--space-4);
   user-select: all;
 }
 
 .invite-card .invite-url {
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-size: 0.78rem;
-  color: #374151;
+  color: var(--color-text-secondary);
   word-break: break-all;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 4px;
-  padding: 0.5rem 0.65rem;
-  margin-bottom: 0.75rem;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) 0.65rem;
+  margin-bottom: var(--space-3);
   user-select: all;
 }
 
@@ -524,60 +617,100 @@
    ------------------------------------------------------------ */
 
 .btn-primary {
+  position: relative;
   display: inline-block;
-  padding: 0.5rem 1.25rem;
-  background: #2563eb;
+  padding: var(--space-2) 1.25rem;
+  background: var(--gradient-brand);
   color: #fff;
   border: none;
-  border-radius: 4px;
-  font-size: 0.95rem;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   font-weight: 600;
+  font-family: var(--font-ui);
   cursor: pointer;
-  transition: background 0.15s ease;
+  overflow: hidden;
+  box-shadow: var(--shadow-glow-bitcoin);
+  transition: transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) ease;
+}
+
+.btn-primary::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.15) 50%, transparent 100%);
+  transform: translateX(-100%);
+  transition: transform var(--duration-slow) ease;
 }
 
 .btn-primary:hover {
-  background: #1d4ed8;
+  transform: translateY(-2px);
+  box-shadow: 0 0 32px rgba(247,147,26,0.55), 0 0 12px rgba(247,147,26,0.3);
+}
+
+.btn-primary:hover::after {
+  transform: translateX(100%);
+}
+
+.btn-primary:active {
+  transform: scale(0.97);
+  box-shadow: var(--shadow-glow-bitcoin);
+}
+
+.btn-primary:focus-visible {
+  outline: 2px solid var(--color-bitcoin);
+  outline-offset: 3px;
 }
 
 .btn-primary:disabled {
-  background: #9ca3af;
+  opacity: 0.35;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .btn-invite {
-  padding: 0.45rem 1rem;
-  background: #0ea5e9;
+  position: relative;
+  overflow: hidden;
+  padding: 0.45rem var(--space-4);
+  background: linear-gradient(135deg, var(--color-pulse) 0%, #0db37a 100%);
   color: #fff;
   border: none;
-  border-radius: 4px;
-  font-size: 0.9rem;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   font-weight: 600;
+  font-family: var(--font-ui);
   cursor: pointer;
-  transition: background 0.15s ease;
+  box-shadow: var(--shadow-glow-teal);
+  transition: transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) ease;
 }
 
 .btn-invite:hover {
-  background: #0284c7;
+  transform: translateY(-2px);
+  box-shadow: 0 0 28px rgba(16,217,160,0.45), 0 0 10px rgba(16,217,160,0.25);
+}
+
+.btn-invite:active {
+  transform: scale(0.97);
 }
 
 .btn-exit {
   display: inline-block;
   padding: 0.45rem 1.1rem;
-  background: #fff;
-  color: #dc2626;
-  border: 1px solid #fca5a5;
-  border-radius: 4px;
-  font-size: 0.9rem;
+  background: transparent;
+  color: var(--color-error);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   font-weight: 600;
+  font-family: var(--font-ui);
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-  margin: 0.75rem 0;
+  transition: background var(--duration-fast) ease, border-color var(--duration-fast) ease;
+  margin: var(--space-3) 0;
 }
 
 .btn-exit:hover {
-  background: #fef2f2;
-  border-color: #dc2626;
+  background: rgba(239, 68, 68, 0.1);
+  border-color: var(--color-error);
 }
 
 /* ------------------------------------------------------------
@@ -585,24 +718,37 @@
    ------------------------------------------------------------ */
 
 #session-display {
-  font-size: 0.9rem;
-  color: #6b7280;
-  margin: 0 0 1rem;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-4);
 }
 
 /* ------------------------------------------------------------
    Error display
    ------------------------------------------------------------ */
 
+@keyframes error-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 #error {
   display: none;
-  margin-top: 1rem;
-  padding: 0.75rem 1rem;
-  background: #fef2f2;
-  color: #dc2626;
-  border: 1px solid #fecaca;
-  border-radius: 6px;
-  font-size: 0.9rem;
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: rgba(239, 68, 68, 0.08);
+  color: var(--color-error);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-left: 3px solid var(--color-error);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  animation: error-slide-in var(--duration-normal) var(--ease-out) both;
 }
 
 /* ------------------------------------------------------------
@@ -611,32 +757,64 @@
 
 .video-row {
   display: flex;
-  gap: 1rem;
+  gap: var(--space-4);
   flex-wrap: wrap;
   justify-content: center;
-  margin-top: 1.5rem;
+  margin-top: var(--space-6);
 }
 
 .video-wrap {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  flex: 1;
+  flex: 2;
   min-width: 280px;
   max-width: 460px;
 }
 
+.video-wrap:last-child {
+  flex: 1;
+}
+
 .video-wrap label {
-  font-size: 0.8rem;
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 1;
+  font-size: var(--text-xs);
   font-weight: 600;
-  color: #6b7280;
+  color: var(--color-text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
+  background: var(--glass-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-full);
+  padding: 0.2rem 0.6rem;
 }
 
 .video-wrap video {
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 9;
   background: #000;
-  border-radius: 6px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-subtle);
+  box-shadow: inset 0 0 24px rgba(0,0,0,0.5);
+  display: block;
+}
+
+/* ------------------------------------------------------------
+   Reduced motion
+   ------------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

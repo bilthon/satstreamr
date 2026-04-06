@@ -1,0 +1,92 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+@font-face {
+  font-family: 'Satoshi Symbol';
+  src: url('/fonts/SatoshiSymbol.otf') format('opentype');
+  font-display: swap;
+}
+
+:root {
+  /* Backgrounds */
+  --color-bg-base: #0a0b14;
+  --color-bg-surface: #111827;
+  --color-bg-elevated: #1a2035;
+  --color-bg-overlay: #242b42;
+
+  /* Brand */
+  --color-bitcoin: #f7931a;
+  --color-lightning: #f0c419;
+  --color-electric: #7c3aed;
+  --color-pulse: #10d9a0;
+
+  /* Gradients */
+  --gradient-brand: linear-gradient(135deg, #f7931a 0%, #ff6b35 50%, #e83e8c 100%);
+  --gradient-brand-subtle: linear-gradient(135deg, rgba(247,147,26,0.12) 0%, rgba(232,62,140,0.06) 100%);
+
+  /* Semantic */
+  --color-success: #10d9a0;
+  --color-warning: #f0c419;
+  --color-error: #ef4444;
+  --color-info: #38bdf8;
+
+  /* Text */
+  --color-text-primary: #eef2ff;
+  --color-text-secondary: #8892b0;
+  --color-text-accent: #f7931a;
+  --color-text-muted: #4b5563;
+
+  /* Borders */
+  --color-border-subtle: rgba(255, 255, 255, 0.07);
+  --color-border-default: rgba(255, 255, 255, 0.12);
+  --color-border-accent: rgba(247, 147, 26, 0.4);
+
+  /* Glass */
+  --glass-bg: rgba(255, 255, 255, 0.04);
+  --glass-border: rgba(255, 255, 255, 0.09);
+
+  /* Typography */
+  --font-ui: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
+
+  /* Spacing */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  /* Border radius */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-card: 0 4px 24px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04);
+  --shadow-modal: 0 16px 48px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06);
+  --shadow-glow-bitcoin: 0 0 24px rgba(247,147,26,0.35), 0 0 8px rgba(247,147,26,0.2);
+  --shadow-glow-teal: 0 0 20px rgba(16,217,160,0.3);
+
+  /* Transitions */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+}
+
+.sat { font-family: 'Satoshi Symbol', sans-serif; }
