@@ -24,6 +24,10 @@ const mintUrl = getMintUrl();
 
 const ui = createSessionUI('viewer');
 
+// Hide tutor-only elements that are visible by default in room.html
+const rateConfigEl = document.getElementById('rate-config');
+if (rateConfigEl !== null) rateConfigEl.style.display = 'none';
+
 const localVideoEl = document.getElementById('local-video') as HTMLVideoElement | null;
 const remoteVideoEl = document.getElementById('remote-video') as HTMLVideoElement | null;
 const sessionDisplayEl = document.getElementById('session-display');
