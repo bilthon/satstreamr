@@ -14,6 +14,7 @@ import { createSessionUI } from '../lib/session-ui.js';
 import { startMedia as sharedStartMedia } from '../lib/media.js';
 import { createSessionSummary } from '../lib/session-summary.js';
 import { wireSharedPeerHandlers, recreatePeer } from '../lib/peer-setup.js';
+import { showToast } from '../lib/toast.js';
 
 const signalingUrl = getSignalingUrl();
 const mintUrl = getMintUrl();
@@ -45,6 +46,9 @@ const localMintUrlEl = document.getElementById('local-mint-url');
 // Exit session button
 const exitSessionBtnEl = document.getElementById('exit-session-btn') as HTMLButtonElement | null;
 
+// Budget low warning
+const budgetLowBannerEl = document.getElementById('budget-low-banner');
+
 function showMintMismatch(sessionMint: string, localMint: string): void {
   if (sessionMintUrlEl !== null) sessionMintUrlEl.textContent = sessionMint;
   if (localMintUrlEl !== null) localMintUrlEl.textContent = localMint;
@@ -68,7 +72,7 @@ function showSessionStats(initialBudget: number): void {
   updateBudgetDisplay(initialBudget);
 }
 
-/** Update the remaining budget display. */
+/** Update the remaining budget display and low-budget warning. */
 function updateBudgetDisplay(budgetSats: number): void {
   if (budgetDisplayEl !== null) {
     budgetDisplayEl.innerHTML = `${budgetSats} <span class="sat">S</span>`;
@@ -76,6 +80,14 @@ function updateBudgetDisplay(budgetSats: number): void {
       budgetDisplayEl.classList.add('low');
     } else {
       budgetDisplayEl.classList.remove('low');
+    }
+  }
+  // Show/hide the low-budget warning banner
+  if (budgetLowBannerEl !== null) {
+    if (budgetSats > 0 && budgetSats <= 10) {
+      budgetLowBannerEl.classList.add('visible');
+    } else {
+      budgetLowBannerEl.classList.remove('visible');
     }
   }
   updateEstDurationDisplay(budgetSats);
@@ -200,8 +212,9 @@ client.onConnect(() => {
   // Load existing session or create a fresh one.
   const walletBalance = getBalance();
   if (walletBalance === 0) {
-    alert(
-      'Your wallet is empty. Please fund your wallet with Cashu tokens before joining a session.'
+    showToast(
+      'Your wallet is empty. Fund your wallet before joining a session.',
+      { variant: 'warning', duration: 8000 },
     );
   }
 
