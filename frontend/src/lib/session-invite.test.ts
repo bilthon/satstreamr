@@ -68,17 +68,15 @@ describe('createInviteUrl', () => {
     expect(url.startsWith('http://localhost:5173')).toBe(true);
   });
 
-  it('includes the ?join= query parameter', () => {
+  it('includes the ?session= query parameter with the session ID', () => {
     const url = createInviteUrl(SAMPLE_PAYLOAD);
-    expect(url).toContain('/?join=');
+    expect(url).toContain('/room.html?session=abc123');
   });
 
-  it('the ?join= value round-trips back to the original payload', () => {
+  it('the ?session= value matches the original sessionId', () => {
     const url = createInviteUrl(SAMPLE_PAYLOAD);
-    const encoded = new URL(url).searchParams.get('join');
-    expect(encoded).not.toBeNull();
-    const decoded = parseInvite(encoded as string);
-    expect(decoded).toEqual(SAMPLE_PAYLOAD);
+    const sid = new URL(url).searchParams.get('session');
+    expect(sid).toBe(SAMPLE_PAYLOAD.sessionId);
   });
 });
 
