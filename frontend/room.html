@@ -30,6 +30,13 @@
         <div class="effective-rate">
           Effective rate: <strong id="effective-rate-display">12.0</strong> sats/min
         </div>
+        <div class="fee-overhead">
+          <span id="fee-overhead-display">Fee overhead: loading…</span>
+          <button id="fee-info-btn" type="button" class="info-icon-btn" aria-label="Fee info">i</button>
+        </div>
+        <div id="fee-info-panel" class="fee-info-panel">
+          Each payment cycle, the viewer sends a Cashu token which the tutor swaps with the mint to claim. This swap incurs a small fee. Larger payments per cycle reduce the fee overhead percentage.
+        </div>
       </div>
       <button id="start-session-btn" type="button" class="btn-primary">Start Session</button>
     </div>

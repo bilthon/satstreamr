@@ -3,7 +3,7 @@ import type { Proof } from '../types/cashu.js';
 import { SignalingClient } from '../signaling-client.js';
 import { PeerConnection } from '../lib/peer-connection.js';
 import { DataChannel } from '../lib/data-channel.js';
-import { checkTokenState, claimProofs, getMeltQuote, meltTokens } from '../lib/cashu-wallet.js';
+import { buildWallet, checkTokenState, claimProofs, getMeltQuote, meltTokens } from '../lib/cashu-wallet.js';
 import type { SignalingMessage } from '../types/signaling.js';
 import { saveSession, loadSession, clearSession } from '../lib/session-storage.js';
 import { getProofs, addProofs } from '../lib/wallet-store.js';
@@ -32,6 +32,9 @@ const rateConfigEl = document.getElementById('rate-config');
 const rateSatsInputEl = document.getElementById('rate-sats-input') as HTMLInputElement | null;
 const rateIntervalInputEl = document.getElementById('rate-interval-input') as HTMLInputElement | null;
 const effectiveRateDisplayEl = document.getElementById('effective-rate-display');
+const feeOverheadDisplayEl = document.getElementById('fee-overhead-display');
+const feeInfoBtnEl = document.getElementById('fee-info-btn') as HTMLButtonElement | null;
+const feeInfoPanelEl = document.getElementById('fee-info-panel');
 const startSessionBtnEl = document.getElementById('start-session-btn') as HTMLButtonElement | null;
 
 // Session UI elements
@@ -265,6 +268,9 @@ function getRateConfig(): { rateSatsPerInterval: number; intervalSeconds: number
   return { rateSatsPerInterval: sats, intervalSeconds: interval };
 }
 
+/** Mint's input fee in parts-per-thousand; loaded from keyset on page init. */
+let mintFeePpk: number | null = null;
+
 /** Update the effective-rate display: (sats / interval * 60) sats/min. */
 function updateEffectiveRateDisplay(): void {
   if (effectiveRateDisplayEl === null) return;
@@ -272,15 +278,60 @@ function updateEffectiveRateDisplay(): void {
   effectiveRateDisplayEl.textContent = (rateSatsPerInterval / intervalSeconds * 60).toFixed(1);
 }
 
+/** Estimated swap fee for a single proof (1 input) at the current feePpk. */
+function estimatedFeePerCycle(): number {
+  if (mintFeePpk === null || mintFeePpk === 0) return 0;
+  return Math.max(1, Math.ceil(mintFeePpk / 1000));
+}
+
+/** Update the fee overhead display based on current rate and feePpk. */
+function updateFeeOverheadDisplay(): void {
+  if (feeOverheadDisplayEl === null) return;
+  const fee = estimatedFeePerCycle();
+  if (fee === 0) {
+    feeOverheadDisplayEl.textContent = 'Fee overhead: none';
+    feeOverheadDisplayEl.classList.remove('warn');
+    return;
+  }
+  const { rateSatsPerInterval } = getRateConfig();
+  const pct = ((fee / rateSatsPerInterval) * 100).toFixed(0);
+  feeOverheadDisplayEl.textContent = `Fee overhead: ~${fee} sat/cycle (~${pct}%)`;
+  if (fee / rateSatsPerInterval > 0.3) {
+    feeOverheadDisplayEl.classList.add('warn');
+  } else {
+    feeOverheadDisplayEl.classList.remove('warn');
+  }
+}
+
 // Wire up real-time rate display updates
 if (rateSatsInputEl !== null) {
   rateSatsInputEl.addEventListener('input', updateEffectiveRateDisplay);
+  rateSatsInputEl.addEventListener('input', updateFeeOverheadDisplay);
 }
 if (rateIntervalInputEl !== null) {
   rateIntervalInputEl.addEventListener('input', updateEffectiveRateDisplay);
 }
-// Initialise the display with the defaults
+// Initialise the displays with the defaults
 updateEffectiveRateDisplay();
+updateFeeOverheadDisplay();
+
+// Fetch mint fee info for the overhead display
+void buildWallet().then(({ feePpk }) => {
+  mintFeePpk = feePpk;
+  updateFeeOverheadDisplay();
+}).catch((err: unknown) => {
+  console.warn('[tutor] could not fetch mint fee info:', err);
+  if (feeOverheadDisplayEl !== null) {
+    feeOverheadDisplayEl.textContent = 'Fee overhead: unavailable';
+  }
+});
+
+// Info icon toggle
+if (feeInfoBtnEl !== null && feeInfoPanelEl !== null) {
+  feeInfoBtnEl.addEventListener('click', () => {
+    feeInfoPanelEl.classList.toggle('open');
+  });
+}
 
 // ---------------------------------------------------------------------------
 // State
