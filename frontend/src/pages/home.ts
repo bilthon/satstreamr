@@ -45,7 +45,7 @@ const tokenDetailsSummaryEl = document.getElementById('token-details-summary');
 
 function renderBalance(balance: number): void {
   if (balanceDisplayEl !== null) {
-    balanceDisplayEl.innerHTML = `Balance: ${balance} <span class="sat">S</span>`;
+    balanceDisplayEl.innerHTML = `${balance.toLocaleString()} <span class="sat">S</span>`;
   }
 }
 

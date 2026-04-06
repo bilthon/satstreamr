@@ -851,3 +851,41 @@ html {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ------------------------------------------------------------
+   Payment received animation
+   ------------------------------------------------------------ */
+
+@keyframes payment-float-up {
+  0%   { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-24px); }
+}
+
+@keyframes payment-highlight {
+  0%   { background-color: rgba(247, 147, 26, 0.25); }
+  100% { background-color: transparent; }
+}
+
+#sats-received {
+  position: relative;
+  transition: background-color var(--duration-slow) ease;
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+}
+
+#sats-received.payment-highlight {
+  animation: payment-highlight 500ms ease-out forwards;
+}
+
+.payment-float {
+  position: absolute;
+  top: 0;
+  right: -3rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-bitcoin);
+  pointer-events: none;
+  animation: payment-float-up 700ms var(--ease-out) forwards;
+  white-space: nowrap;
+}
