@@ -38,6 +38,9 @@ const mintMismatchOverlayEl = document.getElementById('mint-mismatch-overlay');
 const sessionMintUrlEl = document.getElementById('session-mint-url');
 const localMintUrlEl = document.getElementById('local-mint-url');
 
+// Exit session button
+const exitSessionBtnEl = document.getElementById('exit-session-btn') as HTMLButtonElement | null;
+
 function showMintMismatch(sessionMint: string, localMint: string): void {
   if (sessionMintUrlEl !== null) sessionMintUrlEl.textContent = sessionMint;
   if (localMintUrlEl !== null) localMintUrlEl.textContent = localMint;
@@ -103,6 +106,17 @@ function showSessionSummary(): void {
   sessionSummary.showSessionSummary(totalSatsPaidDisplay, totalChunksPaidDisplay);
 }
 
+/** Shared cleanup for session end (local exit or remote session_ended). */
+function endSession(): void {
+  scheduler?.stop();
+  peer.close();
+  if (localStream !== null) {
+    localStream.getTracks().forEach(t => t.stop());
+  }
+  if (exitSessionBtnEl !== null) exitSessionBtnEl.style.display = 'none';
+  showSessionSummary();
+}
+
 // ---------------------------------------------------------------------------
 // Read sessionId from URL query param ?session=<id>
 // ---------------------------------------------------------------------------
@@ -154,6 +168,16 @@ let peer = new PeerConnection();
 // ---------------------------------------------------------------------------
 
 const client = new SignalingClient(signalingUrl);
+
+// "Leave Session" button handler
+if (exitSessionBtnEl !== null) {
+  exitSessionBtnEl.addEventListener('click', () => {
+    if (sessionId !== null) {
+      client.send({ type: 'end_session', sessionId });
+    }
+    endSession();
+  });
+}
 
 client.onConnect(() => {
   ui.hideReconnectOverlay();
@@ -281,7 +305,7 @@ function setupPeerHandlers(): void {
 
       scheduler.onBudgetExhausted(() => {
         ui.showError('Budget exhausted \u2014 session ended');
-        scheduler.stop();
+        scheduler?.stop();
         peer.close();
         if (localStream !== null) {
           localStream.getTracks().forEach(t => t.stop());
@@ -379,13 +403,8 @@ client.onMessage((msg: SignalingMessage) => {
       ui.showError(`Signaling error: ${msg.code}${msg.message !== undefined ? ' -- ' + msg.message : ''}`);
       break;
 
-    case 'end_session':
-      scheduler?.stop();
-      peer.close();
-      if (localStream !== null) {
-        localStream.getTracks().forEach(t => t.stop());
-      }
-      showSessionSummary();
+    case 'session_ended':
+      endSession();
       break;
 
     default:
@@ -428,6 +447,7 @@ async function handleOffer(offer: RTCSessionDescriptionInit): Promise<void> {
     const answer = await peer.handleOffer(offer, localStream);
     client.send({ type: 'answer', sessionId, sdp: answer });
     ui.setStatus('answer sent -- waiting for ICE\u2026');
+    if (exitSessionBtnEl !== null) exitSessionBtnEl.style.display = 'inline-block';
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     ui.showError(`Failed to handle offer: ${message}`);
