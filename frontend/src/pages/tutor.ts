@@ -96,6 +96,26 @@ function updateSatsReceived(delta: number): void {
   if (satsReceivedEl !== null) {
     satsReceivedEl.textContent = String(totalSatsReceived);
   }
+  showPaymentFloat(delta);
+  highlightSatsReceived();
+}
+
+/** Spawn a floating "+N S" badge that animates upward from the counter. */
+function showPaymentFloat(amount: number): void {
+  if (satsReceivedEl === null) return;
+  const float = document.createElement('span');
+  float.className = 'payment-float';
+  float.innerHTML = `+${amount} <span class="sat">S</span>`;
+  satsReceivedEl.appendChild(float);
+  setTimeout(() => float.remove(), 750);
+}
+
+/** Flash the sats-received counter with a brief amber highlight. */
+function highlightSatsReceived(): void {
+  if (satsReceivedEl === null) return;
+  satsReceivedEl.classList.remove('payment-highlight');
+  void satsReceivedEl.offsetWidth; // force reflow to restart animation
+  satsReceivedEl.classList.add('payment-highlight');
 }
 
 /** Clear the invoice countdown timer. */
