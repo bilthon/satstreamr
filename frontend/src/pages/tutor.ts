@@ -44,6 +44,9 @@ const inviteSessionIdEl = document.getElementById('invite-session-id');
 const inviteUrlEl = document.getElementById('invite-url');
 const copyInviteBtnEl = document.getElementById('copy-invite-btn') as HTMLButtonElement | null;
 
+// Exit session button
+const exitSessionBtnEl = document.getElementById('exit-session-btn') as HTMLButtonElement | null;
+
 // Cash-out UI elements
 const invoiceInputEl = document.getElementById('invoice-input') as HTMLInputElement | null;
 const invoiceCountdownEl = document.getElementById('invoice-countdown');
@@ -133,6 +136,16 @@ function startInvoiceCountdown(): void {
 /** Show the session-end summary overlay. */
 function showSessionSummary(): void {
   sessionSummary.showSessionSummary(totalSatsReceived, totalChunksReceived);
+}
+
+/** Shared cleanup for session end (local exit or remote session_ended). */
+function endSession(): void {
+  peer.close();
+  if (localStream !== null) {
+    localStream.getTracks().forEach(t => t.stop());
+  }
+  if (exitSessionBtnEl !== null) exitSessionBtnEl.style.display = 'none';
+  showSessionSummary();
 }
 
 /** Display a message in #cashout-status, optionally styled as an error. */
@@ -340,6 +353,16 @@ if (startSessionBtnEl !== null) {
   });
 }
 
+// "Leave Session" button handler
+if (exitSessionBtnEl !== null) {
+  exitSessionBtnEl.addEventListener('click', () => {
+    if (sessionId !== null) {
+      client.send({ type: 'end_session', sessionId });
+    }
+    endSession();
+  });
+}
+
 client.onDisconnecting(() => {
   ui.showReconnectOverlay();
   ui.setStatus('reconnecting\u2026');
@@ -497,12 +520,8 @@ client.onMessage((msg: SignalingMessage) => {
       void peer.addIceCandidate(msg.candidate as RTCIceCandidateInit);
       break;
 
-    case 'end_session':
-      peer.close();
-      if (localStream !== null) {
-        localStream.getTracks().forEach(t => t.stop());
-      }
-      showSessionSummary();
+    case 'session_ended':
+      endSession();
       break;
 
     case 'error': {
@@ -542,6 +561,7 @@ client.onMessage((msg: SignalingMessage) => {
       if (rateConfigEl !== null) rateConfigEl.style.display = 'none';
       if (sessionIdEl !== null) sessionIdEl.textContent = rejoinedMsg.sessionId;
       if (sessionContainerEl !== null) sessionContainerEl.style.display = 'block';
+      if (exitSessionBtnEl !== null) exitSessionBtnEl.style.display = 'inline-block';
 
       ui.setStatus('rejoined session — starting media…');
 
@@ -616,6 +636,7 @@ function handleSessionCreated(id: string): void {
   if (inviteSectionEl !== null) {
     inviteSectionEl.style.display = 'block';
   }
+  if (exitSessionBtnEl !== null) exitSessionBtnEl.style.display = 'inline-block';
 
   if (copyInviteBtnEl !== null) {
     copyInviteBtnEl.addEventListener('click', () => {
