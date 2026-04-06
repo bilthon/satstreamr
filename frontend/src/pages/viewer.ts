@@ -149,56 +149,6 @@ let dataChannel: DataChannel | null = null;
 let scheduler: PaymentScheduler | null = null;
 let peer = new PeerConnection();
 
-/** Monotonically increasing chunk counter (used only by DEV manual payment). */
-let nextChunkId = 0;
-
-// ---------------------------------------------------------------------------
-// DEV-only payment button (Unit 10)
-// ---------------------------------------------------------------------------
-
-if (import.meta.env.DEV) {
-  const payBtn = document.createElement('button');
-  payBtn.id = 'dev-pay-btn';
-  payBtn.textContent = 'Send 1 sat test payment';
-  payBtn.style.cssText =
-    'position:fixed;bottom:1rem;right:1rem;padding:0.5rem 1rem;' +
-    'background:#f7931a;color:#fff;border:none;border-radius:4px;' +
-    'font-size:1rem;cursor:pointer;z-index:9998;';
-
-  payBtn.addEventListener('click', () => {
-    void handleDevPayment();
-  });
-
-  document.body.appendChild(payBtn);
-}
-
-async function handleDevPayment(): Promise<void> {
-  if (dataChannel === null || !dataChannel.isOpen) {
-    ui.showError('[DEV] data channel is not open');
-    return;
-  }
-
-  const chunkId = nextChunkId;
-
-  try {
-    // Select a plain unlocked proof from the pre-split wallet for a 1 sat test payment.
-    const proofs = spendProofs(1);
-
-    const encodedToken = getEncodedToken({
-      mint: mintUrl,
-      proofs,
-      unit: 'sat',
-    });
-
-    dataChannel.sendMessage({ type: 'token_payment', chunkId, encodedToken });
-    nextChunkId += 1;
-    console.log(`[payment] sent chunk #${chunkId}`);
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    ui.showError(`[DEV] payment failed: ${message}`);
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Signaling client
 // ---------------------------------------------------------------------------
@@ -297,9 +247,6 @@ function setupPeerHandlers(): void {
       const session = loadSession();
       const initialChunkId = session?.chunkCount ?? 0;
       const initialTotalSatsPaid = session?.totalSatsPaid ?? 0;
-
-      // Sync nextChunkId for the DEV manual payment button.
-      nextChunkId = initialChunkId;
 
       // Show the session stats bar with the current wallet balance.
       totalSatsPaidDisplay = initialTotalSatsPaid;

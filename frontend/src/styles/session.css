@@ -1,7 +1,12 @@
 /* ============================================================
    session.css — Session UI styles for satstreamr
    Covers:
+     - Room page base styles
      - Pulse animation for chunk payment indicator
+     - Session stats bars (tutor + viewer)
+     - Rate config card
+     - Invite card
+     - Video layout
      - Session-end summary overlay
      - Payment paused banner
    ============================================================ */
@@ -32,29 +37,32 @@
 }
 
 /* ------------------------------------------------------------
-   Session stats bar (tutor + viewer)
+   Session stats bars (tutor + viewer)
    ------------------------------------------------------------ */
 
-#session-stats {
-  display: flex;
+#tutor-stats,
+#viewer-stats {
+  /* display is toggled to flex by JS; see also .room-body overrides below */
   gap: 2rem;
   align-items: center;
   margin: 0.75rem 0;
   padding: 0.6rem 1rem;
   background: #f0f4ff;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 0.95rem;
   flex-wrap: wrap;
 }
 
-#session-stats .stat-label {
+#tutor-stats .stat-label,
+#viewer-stats .stat-label {
   font-size: 0.8rem;
-  color: #555;
+  color: #6b7280;
   display: block;
   margin-bottom: 0.1rem;
 }
 
-#session-stats .stat-value {
+#tutor-stats .stat-value,
+#viewer-stats .stat-value {
   font-size: 1.25rem;
   font-weight: bold;
   font-family: monospace;
@@ -301,4 +309,266 @@
   font-size: 0.9em;
   color: #1a1a2e;
   word-break: break-all;
+}
+
+/* ============================================================
+   Room page layout and component styles
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   Base page
+   ------------------------------------------------------------ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+.room-body {
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  max-width: 960px;
+  margin: 2rem auto;
+  padding: 0 1.5rem;
+  color: #1a1a2e;
+  background: #fff;
+}
+
+.room-body h1 {
+  font-size: 1.75rem;
+  margin: 0 0 0.25rem;
+}
+
+/* ------------------------------------------------------------
+   Status bar
+   ------------------------------------------------------------ */
+
+.status-bar {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin: 0.5rem 0 1.25rem;
+}
+
+.status-bar .status-sep {
+  margin: 0 0.4rem;
+  color: #d1d5db;
+}
+
+/* ------------------------------------------------------------
+   Rate config card
+   ------------------------------------------------------------ */
+
+.rate-config-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.25rem;
+  background: #f9fafb;
+}
+
+.rate-config-card h2 {
+  font-size: 1.1rem;
+  margin: 0 0 0.75rem;
+  color: #1a1a2e;
+}
+
+.rate-config-row {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.rate-config-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+  color: #374151;
+}
+
+.rate-config-input {
+  width: 6rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+#start-session-btn {
+  margin-top: 1rem;
+}
+
+.effective-rate {
+  font-size: 0.9rem;
+  color: #6b7280;
+  padding-bottom: 0.35rem;
+}
+
+/* ------------------------------------------------------------
+   Session info container
+   ------------------------------------------------------------ */
+
+.session-info {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  background: #f0f4ff;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.session-info .session-code {
+  font-family: monospace;
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #1a1a2e;
+  user-select: all;
+}
+
+/* ------------------------------------------------------------
+   Invite card
+   ------------------------------------------------------------ */
+
+.invite-card {
+  border: 1px solid #38bdf8;
+  border-radius: 6px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.25rem;
+  background: #f0f9ff;
+}
+
+.invite-card h2 {
+  font-size: 1.1rem;
+  margin: 0 0 0.75rem;
+  color: #0369a1;
+}
+
+.invite-card .invite-label {
+  font-size: 0.85rem;
+  color: #555;
+  margin: 0 0 0.4rem;
+}
+
+.invite-card .invite-code {
+  font-family: monospace;
+  font-size: 2rem;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  color: #1a1a2e;
+  word-break: break-all;
+  margin-bottom: 1rem;
+  user-select: all;
+}
+
+.invite-card .invite-url {
+  font-family: monospace;
+  font-size: 0.78rem;
+  color: #374151;
+  word-break: break-all;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  padding: 0.5rem 0.65rem;
+  margin-bottom: 0.75rem;
+  user-select: all;
+}
+
+/* ------------------------------------------------------------
+   Buttons
+   ------------------------------------------------------------ */
+
+.btn-primary {
+  display: inline-block;
+  padding: 0.5rem 1.25rem;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-primary:hover {
+  background: #1d4ed8;
+}
+
+.btn-primary:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.btn-invite {
+  padding: 0.45rem 1rem;
+  background: #0ea5e9;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-invite:hover {
+  background: #0284c7;
+}
+
+/* ------------------------------------------------------------
+   Session display line under h1
+   ------------------------------------------------------------ */
+
+#session-display {
+  font-size: 0.9rem;
+  color: #6b7280;
+  margin: 0 0 1rem;
+}
+
+/* ------------------------------------------------------------
+   Error display
+   ------------------------------------------------------------ */
+
+#error {
+  display: none;
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+/* ------------------------------------------------------------
+   Video layout
+   ------------------------------------------------------------ */
+
+.video-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 1.5rem;
+}
+
+.video-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 280px;
+  max-width: 460px;
+}
+
+.video-wrap label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.video-wrap video {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #000;
+  border-radius: 6px;
 }
