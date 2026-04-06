@@ -5,13 +5,15 @@ import { DataChannel } from '../lib/data-channel.js';
 import { preSplitProofs } from '../lib/cashu-wallet.js';
 import { PaymentScheduler } from '../lib/payment-scheduler.js';
 import type { SignalingMessage } from '../types/signaling.js';
-import { saveSession, loadSession, updateSession, clearSession } from '../lib/session-storage.js';
+import { saveSession, loadSession, updateSession } from '../lib/session-storage.js';
 import { assertSameMint, MintMismatchError } from '../lib/mint-guard.js';
 import { getBalance, onBalanceChange, spendProofs } from '../lib/wallet-store.js';
 import { getMintUrl } from '../lib/config.js';
 import { getSignalingUrl } from '../lib/signaling-url.js';
 import { createSessionUI } from '../lib/session-ui.js';
 import { startMedia as sharedStartMedia } from '../lib/media.js';
+import { createSessionSummary } from '../lib/session-summary.js';
+import { wireSharedPeerHandlers, recreatePeer } from '../lib/peer-setup.js';
 
 const signalingUrl = getSignalingUrl();
 const mintUrl = getMintUrl();
@@ -27,16 +29,9 @@ const remoteVideoEl = document.getElementById('remote-video') as HTMLVideoElemen
 const sessionDisplayEl = document.getElementById('session-display');
 
 // Session UI elements
-const sessionStatsEl = document.getElementById('session-stats');
 const budgetDisplayEl = document.getElementById('budget-display');
 const estDurationDisplayEl = document.getElementById('est-duration-display');
 const chunkIndicatorEl = document.getElementById('chunk-indicator');
-const paymentPausedBannerEl = document.getElementById('payment-paused-banner');
-const sessionSummaryOverlayEl = document.getElementById('session-summary-overlay');
-const summaryDurationEl = document.getElementById('summary-duration');
-const summarySatsEl = document.getElementById('summary-sats');
-const summaryChunksEl = document.getElementById('summary-chunks');
-const summaryCloseBtnEl = document.getElementById('summary-close-btn');
 
 // Mint mismatch overlay
 const mintMismatchOverlayEl = document.getElementById('mint-mismatch-overlay');
@@ -55,32 +50,14 @@ function showMintMismatch(sessionMint: string, localMint: string): void {
 // Session UI state
 // ---------------------------------------------------------------------------
 
-let sessionStartTime: number | null = null;
 let totalSatsPaidDisplay = 0;
 let totalChunksPaidDisplay = 0;
-let summaryShown = false;
 
-/** Format seconds as MM:SS. */
-function formatElapsed(totalSeconds: number): string {
-  const mins = Math.floor(totalSeconds / 60);
-  const secs = totalSeconds % 60;
-  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-}
-
-/** Return elapsed seconds since session start (0 if not started). */
-function getElapsedSeconds(): number {
-  if (sessionStartTime === null) return 0;
-  return Math.floor((Date.now() - sessionStartTime) / 1000);
-}
+const sessionSummary = createSessionSummary();
 
 /** Show the session stats bar and record start time. */
 function showSessionStats(initialBudget: number): void {
-  if (sessionStartTime === null) {
-    sessionStartTime = Date.now();
-  }
-  if (sessionStatsEl !== null) {
-    sessionStatsEl.style.display = 'flex';
-  }
+  sessionSummary.showSessionStats(initialBudget);
   updateBudgetDisplay(initialBudget);
 }
 
@@ -121,47 +98,9 @@ function triggerChunkPulse(): void {
   }, 500);
 }
 
-/** Show the payment-paused banner. */
-function showPaymentPausedBanner(): void {
-  if (paymentPausedBannerEl !== null) {
-    paymentPausedBannerEl.classList.add('visible');
-  }
-}
-
-/** Hide the payment-paused banner. */
-function hidePaymentPausedBanner(): void {
-  if (paymentPausedBannerEl !== null) {
-    paymentPausedBannerEl.classList.remove('visible');
-  }
-}
-
 /** Show the session-end summary overlay. */
 function showSessionSummary(): void {
-  if (summaryShown) return;
-  summaryShown = true;
-
-  const elapsed = getElapsedSeconds();
-
-  if (summaryDurationEl !== null) {
-    summaryDurationEl.textContent = formatElapsed(elapsed);
-  }
-  if (summarySatsEl !== null) {
-    summarySatsEl.textContent = String(totalSatsPaidDisplay);
-  }
-  if (summaryChunksEl !== null) {
-    summaryChunksEl.textContent = String(totalChunksPaidDisplay);
-  }
-  if (sessionSummaryOverlayEl !== null) {
-    sessionSummaryOverlayEl.classList.add('visible');
-  }
-}
-
-// Wire up the close button
-if (summaryCloseBtnEl !== null) {
-  summaryCloseBtnEl.addEventListener('click', () => {
-    clearSession();
-    window.location.href = '/';
-  });
+  sessionSummary.showSessionSummary(totalSatsPaidDisplay, totalChunksPaidDisplay);
 }
 
 // ---------------------------------------------------------------------------
@@ -337,16 +276,7 @@ client.onReconnected(() => {
 // ---------------------------------------------------------------------------
 
 function setupPeerHandlers(): void {
-  // Wire up ICE candidate forwarding
-  peer.onIceCandidate((candidate) => {
-    if (sessionId === null) return;
-    client.send({ type: 'ice_candidate', sessionId, candidate });
-  });
-
-  // ICE state display
-  peer.onIceStateChange = (state) => {
-    ui.setStatus(`ICE connection state: ${state}`);
-  };
+  wireSharedPeerHandlers(peer, () => sessionId, client, ui.setStatus, remoteVideoEl);
 
   // Data channel
   peer.onDataChannel = (event) => {
@@ -375,7 +305,7 @@ function setupPeerHandlers(): void {
       totalSatsPaidDisplay = initialTotalSatsPaid;
       totalChunksPaidDisplay = initialChunkId;
       showSessionStats(getBalance());
-      hidePaymentPausedBanner();
+      sessionSummary.hidePaymentPausedBanner();
 
       // Subscribe to wallet balance changes for reactive budget display.
       unsubscribeBalance = onBalanceChange((balance) => {
@@ -415,7 +345,7 @@ function setupPeerHandlers(): void {
 
       scheduler.onPaymentFailure((reason) => {
         ui.showError(`Payment failed \u2014 session paused: ${reason}`);
-        showPaymentPausedBanner();
+        sessionSummary.showPaymentPausedBanner();
       });
 
       scheduler.onChunkPaid((chunkId, totalPaid, balance) => {
@@ -428,7 +358,7 @@ function setupPeerHandlers(): void {
         // call updateBudgetDisplay here as a synchronous fallback.
         updateBudgetDisplay(balance);
         triggerChunkPulse();
-        hidePaymentPausedBanner();
+        sessionSummary.hidePaymentPausedBanner();
       });
 
       scheduler.start();
@@ -444,14 +374,6 @@ function setupPeerHandlers(): void {
       scheduler?.stop();
       scheduler = null;
     };
-  };
-
-  // Remote track -> remote video
-  peer.onTrack = (event) => {
-    console.log('[viewer] remote track received:', event.track.kind);
-    if (remoteVideoEl !== null && event.streams[0] !== undefined) {
-      remoteVideoEl.srcObject = event.streams[0];
-    }
   };
 }
 
@@ -548,8 +470,7 @@ async function handleOffer(offer: RTCSessionDescriptionInit): Promise<void> {
   ui.setStatus('offer received -- creating answer\u2026');
 
   // Recreate peer connection for renegotiation (tutor may have reconnected).
-  peer.close();
-  peer = new PeerConnection();
+  peer = recreatePeer(peer);
   setupPeerHandlers();
 
   scheduler?.stop();

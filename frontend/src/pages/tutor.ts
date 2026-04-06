@@ -12,6 +12,8 @@ import { getMintUrl } from '../lib/config.js';
 import { getSignalingUrl } from '../lib/signaling-url.js';
 import { createSessionUI } from '../lib/session-ui.js';
 import { startMedia as sharedStartMedia } from '../lib/media.js';
+import { createSessionSummary } from '../lib/session-summary.js';
+import { wireSharedPeerHandlers, recreatePeer } from '../lib/peer-setup.js';
 
 const signalingUrl = getSignalingUrl();
 
@@ -33,15 +35,8 @@ const effectiveRateDisplayEl = document.getElementById('effective-rate-display')
 const startSessionBtnEl = document.getElementById('start-session-btn') as HTMLButtonElement | null;
 
 // Session UI elements
-const sessionStatsEl = document.getElementById('session-stats');
 const elapsedTimeEl = document.getElementById('elapsed-time');
 const satsReceivedEl = document.getElementById('sats-received');
-const paymentPausedBannerEl = document.getElementById('payment-paused-banner');
-const sessionSummaryOverlayEl = document.getElementById('session-summary-overlay');
-const summaryDurationEl = document.getElementById('summary-duration');
-const summarySatsEl = document.getElementById('summary-sats');
-const summaryChunksEl = document.getElementById('summary-chunks');
-const summaryCloseBtnEl = document.getElementById('summary-close-btn');
 
 // Invite display elements
 const inviteSectionEl = document.getElementById('invite-section');
@@ -59,29 +54,24 @@ const cashoutStatusEl = document.getElementById('cashout-status');
 // Session UI state
 // ---------------------------------------------------------------------------
 
-let sessionStartTime: number | null = null;
 let elapsedTimerHandle: ReturnType<typeof setInterval> | null = null;
 let totalSatsReceived = 0;
 let totalChunksReceived = 0;
-let summaryShown = false;
 let invoiceCountdownHandle: ReturnType<typeof setInterval> | null = null;
 
-/** Format seconds as MM:SS. */
-function formatElapsed(totalSeconds: number): string {
-  const mins = Math.floor(totalSeconds / 60);
-  const secs = totalSeconds % 60;
-  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-}
+const sessionSummary = createSessionSummary({
+  onBeforeSummary: () => { stopElapsedTimer(); },
+  onAfterSummary: () => { wireCashOut(); },
+});
 
 /** Start the elapsed timer. Called when the data channel opens. */
 function startElapsedTimer(): void {
   if (elapsedTimerHandle !== null) return;
-  sessionStartTime = Date.now();
+  sessionSummary.startSessionTimer();
   elapsedTimerHandle = setInterval(() => {
-    if (sessionStartTime === null) return;
-    const elapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
+    const elapsed = sessionSummary.getElapsedSeconds();
     if (elapsedTimeEl !== null) {
-      elapsedTimeEl.textContent = formatElapsed(elapsed);
+      elapsedTimeEl.textContent = sessionSummary.formatElapsed(elapsed);
     }
   }, 1000);
 }
@@ -94,39 +84,12 @@ function stopElapsedTimer(): void {
   }
 }
 
-/** Return elapsed seconds since session start (0 if not started). */
-function getElapsedSeconds(): number {
-  if (sessionStartTime === null) return 0;
-  return Math.floor((Date.now() - sessionStartTime) / 1000);
-}
-
-/** Show the session stats bar. */
-function showSessionStats(): void {
-  if (sessionStatsEl !== null) {
-    sessionStatsEl.style.display = 'flex';
-  }
-}
-
 /** Update the sats-received counter. */
 function updateSatsReceived(delta: number): void {
   totalSatsReceived += delta;
   totalChunksReceived += 1;
   if (satsReceivedEl !== null) {
     satsReceivedEl.textContent = String(totalSatsReceived);
-  }
-}
-
-/** Show the payment-paused banner. */
-function showPaymentPausedBanner(): void {
-  if (paymentPausedBannerEl !== null) {
-    paymentPausedBannerEl.classList.add('visible');
-  }
-}
-
-/** Hide the payment-paused banner. */
-function hidePaymentPausedBanner(): void {
-  if (paymentPausedBannerEl !== null) {
-    paymentPausedBannerEl.classList.remove('visible');
   }
 }
 
@@ -168,27 +131,7 @@ function startInvoiceCountdown(): void {
 
 /** Show the session-end summary overlay. */
 function showSessionSummary(): void {
-  if (summaryShown) return;
-  summaryShown = true;
-
-  stopElapsedTimer();
-  const elapsed = getElapsedSeconds();
-
-  if (summaryDurationEl !== null) {
-    summaryDurationEl.textContent = formatElapsed(elapsed);
-  }
-  if (summarySatsEl !== null) {
-    summarySatsEl.textContent = String(totalSatsReceived);
-  }
-  if (summaryChunksEl !== null) {
-    summaryChunksEl.textContent = String(totalChunksReceived);
-  }
-  if (sessionSummaryOverlayEl !== null) {
-    sessionSummaryOverlayEl.classList.add('visible');
-  }
-
-  // Wire up cash-out logic
-  wireCashOut();
+  sessionSummary.showSessionSummary(totalSatsReceived, totalChunksReceived);
 }
 
 /** Display a message in #cashout-status, optionally styled as an error. */
@@ -295,14 +238,6 @@ async function handlePayInvoice(proofs: Proof[]): Promise<void> {
     setCashoutStatus(msg, true);
     payInvoiceBtnEl.disabled = false;
   }
-}
-
-// Wire up the close button
-if (summaryCloseBtnEl !== null) {
-  summaryCloseBtnEl.addEventListener('click', () => {
-    clearSession();
-    window.location.href = '/';
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -434,19 +369,8 @@ client.onReconnected(() => {
 // ---------------------------------------------------------------------------
 
 function setupPeerHandlers(): void {
-  // Wire up ICE candidate forwarding
-  peer.onIceCandidate((candidate) => {
-    if (sessionId === null) {
-      console.warn('[tutor] ICE candidate arrived but no sessionId yet -- dropping');
-      return;
-    }
-    client.send({ type: 'ice_candidate', sessionId, candidate });
-  });
-
-  // ICE state display
-  peer.onIceStateChange = (state) => {
-    ui.setStatus(`ICE connection state: ${state}`);
-  };
+  const remoteVideoEl = document.getElementById('remote-video') as HTMLVideoElement | null;
+  wireSharedPeerHandlers(peer, () => sessionId, client, ui.setStatus, remoteVideoEl);
 
   // Data channel -- token receipt, verify, ack/nack (Unit 10)
   peer.onDataChannel = (event) => {
@@ -456,8 +380,8 @@ function setupPeerHandlers(): void {
 
     // Start the elapsed timer now that the data channel is open
     startElapsedTimer();
-    showSessionStats();
-    hidePaymentPausedBanner();
+    sessionSummary.showSessionStats();
+    sessionSummary.hidePaymentPausedBanner();
 
     event.channel.onclose = () => {
       console.log('[datachannel] closed');
@@ -468,7 +392,7 @@ function setupPeerHandlers(): void {
     dataChannel.onMessage((msg) => {
       if (msg.type === 'session_paused') {
         // Viewer signaled that payment was paused
-        showPaymentPausedBanner();
+        sessionSummary.showPaymentPausedBanner();
         return;
       }
 
@@ -490,14 +414,6 @@ function setupPeerHandlers(): void {
 
       void handleTokenPayment(chunkId, encodedToken);
     });
-  };
-
-  // Remote track -> remote video
-  peer.onTrack = (event) => {
-    const remoteVideoEl = document.getElementById('remote-video') as HTMLVideoElement | null;
-    if (remoteVideoEl !== null && event.streams[0] !== undefined) {
-      remoteVideoEl.srcObject = event.streams[0];
-    }
   };
 }
 
@@ -550,7 +466,7 @@ async function handleTokenPayment(chunkId: number, encodedToken: string): Promis
     addProofs(newProofs);
 
     // If the payment was previously paused and a new chunk just succeeded, hide the banner.
-    hidePaymentPausedBanner();
+    sessionSummary.hidePaymentPausedBanner();
   } catch (err: unknown) {
     const reason = err instanceof Error ? err.message : String(err);
     console.error(`[payment] claimProofs failed for chunk #${chunkId}:`, reason);
@@ -694,8 +610,7 @@ async function handleViewerJoined(): Promise<void> {
   // Close the stale peer connection and create a fresh one so that addTrack
   // does not throw "A sender already exists for the track" when a viewer
   // leaves and rejoins.
-  peer.close();
-  peer = new PeerConnection();
+  peer = recreatePeer(peer);
   setupPeerHandlers();
   lastSeenChunkId = -1;
   dataChannel = null;
