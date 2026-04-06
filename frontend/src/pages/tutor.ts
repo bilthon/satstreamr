@@ -521,6 +521,30 @@ client.onMessage((msg: SignalingMessage) => {
       break;
     }
 
+    case 'session_rejoined': {
+      // Tutor successfully rejoined an existing session — restore state
+      // and trigger a fresh WebRTC offer so video resumes.
+      const rejoinedId = (msg as { sessionId: string }).sessionId;
+      sessionId = rejoinedId;
+      client.setSessionId(rejoinedId);
+
+      // Hide rate config, show session info (same as handleSessionCreated)
+      if (rateConfigEl !== null) rateConfigEl.style.display = 'none';
+      if (sessionIdEl !== null) sessionIdEl.textContent = rejoinedId;
+      if (sessionContainerEl !== null) sessionContainerEl.style.display = 'block';
+
+      ui.setStatus('rejoined session — starting media…');
+
+      // Start local media, then trigger a new offer to the viewer
+      void sharedStartMedia(peer, localVideoEl, ui.showError).then((stream) => {
+        localStream = stream;
+        if (stream !== null) {
+          void handleViewerJoined();
+        }
+      });
+      break;
+    }
+
     default:
       break;
   }
