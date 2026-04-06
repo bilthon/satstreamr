@@ -23,8 +23,6 @@ const signalingUrl = getSignalingUrl();
 
 const ui = createSessionUI('tutor');
 
-const sessionIdEl = document.getElementById('session-id');
-const sessionContainerEl = document.getElementById('session-container');
 const localVideoEl = document.getElementById('local-video') as HTMLVideoElement | null;
 
 // Rate configuration UI elements
@@ -428,12 +426,6 @@ client.onReconnected(() => {
   const saved = loadSession();
   if (saved !== null) {
     ui.setStatus(`reconnected -- session ${saved.sessionId}`);
-    if (sessionIdEl !== null) {
-      sessionIdEl.textContent = saved.sessionId;
-    }
-    if (sessionContainerEl !== null) {
-      sessionContainerEl.style.display = 'block';
-    }
   } else {
     ui.setStatus('reconnected');
   }
@@ -610,8 +602,6 @@ client.onMessage((msg: SignalingMessage) => {
 
       // Hide rate config, show session info (same as handleSessionCreated)
       if (rateConfigEl !== null) rateConfigEl.style.display = 'none';
-      if (sessionIdEl !== null) sessionIdEl.textContent = rejoinedMsg.sessionId;
-      if (sessionContainerEl !== null) sessionContainerEl.style.display = 'block';
       if (exitSessionBtnEl !== null) exitSessionBtnEl.style.display = 'inline-block';
 
       ui.setStatus('rejoined session — starting media…');
@@ -661,13 +651,6 @@ function handleSessionCreated(id: string): void {
     chunkCount: 0,
     totalSatsPaid: 0,
   });
-
-  if (sessionIdEl !== null) {
-    sessionIdEl.textContent = id;
-  }
-  if (sessionContainerEl !== null) {
-    sessionContainerEl.style.display = 'block';
-  }
 
   // Build and display the invite using the configured rate
   const { rateSatsPerInterval, intervalSeconds } = getRateConfig();
