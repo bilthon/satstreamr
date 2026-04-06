@@ -67,7 +67,7 @@ function showSessionStats(initialBudget: number): void {
 /** Update the remaining budget display. */
 function updateBudgetDisplay(budgetSats: number): void {
   if (budgetDisplayEl !== null) {
-    budgetDisplayEl.textContent = `${budgetSats} sats`;
+    budgetDisplayEl.innerHTML = `${budgetSats} <span class="sat">S</span>`;
     if (budgetSats <= 10) {
       budgetDisplayEl.classList.add('low');
     } else {

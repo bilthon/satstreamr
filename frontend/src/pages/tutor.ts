@@ -150,9 +150,13 @@ function endSession(): void {
 }
 
 /** Display a message in #cashout-status, optionally styled as an error. */
-function setCashoutStatus(text: string, isError = false): void {
+function setCashoutStatus(text: string, isError = false, html = false): void {
   if (cashoutStatusEl === null) return;
-  cashoutStatusEl.textContent = text;
+  if (html) {
+    cashoutStatusEl.innerHTML = text;
+  } else {
+    cashoutStatusEl.textContent = text;
+  }
   cashoutStatusEl.style.color = isError ? '#dc2626' : '';
 }
 
@@ -235,7 +239,7 @@ async function handlePayInvoice(proofs: Proof[]): Promise<void> {
     return;
   }
 
-  setCashoutStatus(`Paying ${String(amount)} sats + up to ${String(feeReserve)} sats fee\u2026`);
+  setCashoutStatus(`Paying ${String(amount)} <span class="sat">S</span> + up to ${String(feeReserve)} <span class="sat">S</span> fee\u2026`, false, true);
 
   try {
     const result = await meltTokens(invoice, quoteId, proofs);
@@ -293,7 +297,7 @@ function updateFeeOverheadDisplay(): void {
   }
   const { rateSatsPerInterval } = getRateConfig();
   const pct = ((fee / rateSatsPerInterval) * 100).toFixed(0);
-  feeOverheadDisplayEl.textContent = `Fee overhead: ~${fee} sat/cycle (~${pct}%)`;
+  feeOverheadDisplayEl.innerHTML = `Fee overhead: ~${fee} <span class="sat">S</span>/cycle (~${pct}%)`;
   if (fee / rateSatsPerInterval > 0.3) {
     feeOverheadDisplayEl.classList.add('warn');
   } else {

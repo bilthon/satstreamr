@@ -45,7 +45,7 @@ const tokenDetailsSummaryEl = document.getElementById('token-details-summary');
 
 function renderBalance(balance: number): void {
   if (balanceDisplayEl !== null) {
-    balanceDisplayEl.textContent = `Balance: ${balance} sats`;
+    balanceDisplayEl.innerHTML = `Balance: ${balance} <span class="sat">S</span>`;
   }
 }
 
@@ -92,15 +92,15 @@ function renderTokenDetails(): void {
     .map(([denom, count]) => {
       const subtotal = denom * count;
       return `<tr>
-        <td>${denom} sat${denom === 1 ? '' : 's'}</td>
+        <td>${denom} <span class="sat">S</span></td>
         <td>${count}</td>
-        <td>${subtotal} sat${subtotal === 1 ? '' : 's'}</td>
+        <td>${subtotal} <span class="sat">S</span></td>
       </tr>`;
     })
     .join('');
 
   const totalSats = proofs.reduce((sum, p) => sum + p.amount, 0);
-  tokenDetailsSummaryEl.textContent = `Total: ${totalSats} sat${totalSats === 1 ? '' : 's'} (${proofs.length} proof${proofs.length === 1 ? '' : 's'})`;
+  tokenDetailsSummaryEl.innerHTML = `Total: ${totalSats} <span class="sat">S</span> (${proofs.length} proof${proofs.length === 1 ? '' : 's'})`;
 }
 
 // Wire up toggle button.
@@ -248,7 +248,7 @@ if (depositGenerateBtnEl !== null) {
     const amount = parseInt(rawAmount, 10);
 
     if (!rawAmount || isNaN(amount) || amount <= 0) {
-      showDepositStatus('Please enter a valid amount in sats.', 'error');
+      showDepositStatus('Please enter a valid amount.', 'error');
       return;
     }
 
@@ -298,7 +298,7 @@ if (depositGenerateBtnEl !== null) {
       }
 
       // Balance is updated reactively via onBalanceChange — just show success.
-      showDepositStatus(`Deposited ${amount} sats!`, 'success');
+      showDepositStatus(`Deposited ${amount} <span class="sat">S</span>!`, 'success');
       depositGenerateBtnEl.disabled = false;
     })();
   });
@@ -340,7 +340,7 @@ function hideWithdrawStatus(): void {
 function showWithdrawQuote(amount: number, fee: number): void {
   if (withdrawQuoteDisplayEl === null) return;
   const total = amount + fee;
-  withdrawQuoteDisplayEl.textContent = `Amount: ${amount} sats, Fee: ${fee} sats, Total: ${total} sats`;
+  withdrawQuoteDisplayEl.innerHTML = `Amount: ${amount} <span class="sat">S</span>, Fee: ${fee} <span class="sat">S</span>, Total: ${total} <span class="sat">S</span>`;
   withdrawQuoteDisplayEl.style.display = 'block';
 }
 
@@ -433,7 +433,7 @@ if (withdrawGetQuoteBtnEl !== null) {
 
       if (balance < total) {
         showWithdrawStatus(
-          `Insufficient balance — you have ${balance} sats, need ${total} sats`,
+          `Insufficient balance — you have ${balance}, need ${total}`,
           'error'
         );
         if (withdrawGetQuoteBtnEl !== null) withdrawGetQuoteBtnEl.disabled = false;
@@ -586,11 +586,11 @@ if (joinParam !== null && invitePanelEl !== null) {
         ? Math.floor((balance / invite.rateSatsPerInterval) * (invite.intervalSeconds / 60))
         : 0;
 
-    const rateLabel = `${invite.rateSatsPerInterval} sats every ${invite.intervalSeconds} seconds`;
+    const rateLabel = `${invite.rateSatsPerInterval} <span class="sat">S</span> every ${invite.intervalSeconds} seconds`;
     const durationLabel =
       balance > 0
-        ? `${balance} sats (~${String(estimatedMinutes)} min)`
-        : '0 sats (deposit first)';
+        ? `${balance} <span class="sat">S</span> (~${String(estimatedMinutes)} min)`
+        : `0 <span class="sat">S</span> (deposit first)`;
 
     if (inviteJsonEl !== null) {
       inviteJsonEl.innerHTML = [

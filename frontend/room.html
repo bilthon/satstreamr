@@ -20,7 +20,7 @@
       <h2>Session Rate</h2>
       <div class="rate-config-row">
         <label class="rate-config-label">
-          Sats per payment
+          <span class="sat">S</span> per payment
           <input type="number" id="rate-sats-input" value="2" min="1" class="rate-config-input" />
         </label>
         <label class="rate-config-label">
@@ -28,7 +28,7 @@
           <input type="number" id="rate-interval-input" value="10" min="5" class="rate-config-input" />
         </label>
         <div class="effective-rate">
-          Effective rate: <strong id="effective-rate-display">12.0</strong> sats/min
+          Effective rate: <strong id="effective-rate-display">12.0</strong> <span class="sat">S</span>/min
         </div>
         <div class="fee-overhead">
           <span id="fee-overhead-display">Fee overhead: loading…</span>
@@ -58,7 +58,7 @@
         <span class="stat-value" id="elapsed-time">00:00</span>
       </div>
       <div>
-        <span class="stat-label">Sats received</span>
+        <span class="stat-label"><span class="sat">S</span> received</span>
         <span class="stat-value" id="sats-received">0</span>
       </div>
     </div>
@@ -103,7 +103,7 @@
           <span class="value" id="summary-duration">—</span>
         </div>
         <div class="summary-row">
-          <span class="label">Total sats exchanged</span>
+          <span class="label">Total <span class="sat">S</span> exchanged</span>
           <span class="value" id="summary-sats">—</span>
         </div>
         <div class="summary-row">

@@ -5,6 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Satstreamr</title>
     <style>
+      @font-face {
+        font-family: 'Satoshi Symbol';
+        src: url('/fonts/SatoshiSymbol.otf') format('opentype');
+        font-display: swap;
+      }
+
+      .sat {
+        font-family: 'Satoshi Symbol', sans-serif;
+      }
+
       *, *::before, *::after { box-sizing: border-box; }
 
       body {
@@ -568,7 +578,7 @@
 
     <!-- Wallet widget -->
     <div id="wallet-widget">
-      <span id="balance-display">Balance: — sats</span>
+      <span id="balance-display">Balance: — <span class="sat">S</span></span>
       <button class="wallet-btn" id="deposit-btn" type="button">Deposit</button>
       <button class="wallet-btn" id="withdraw-btn" type="button">Withdraw</button>
     </div>
@@ -618,7 +628,7 @@
     <!-- Start streaming (tutor) -->
     <div class="section-card">
       <h2>Start Streaming</h2>
-      <p>Share your screen or camera and receive sats per minute from viewers.</p>
+      <p>Share your screen or camera and receive <span class="sat">S</span> per minute from viewers.</p>
       <button class="btn-primary" id="start-streaming-btn" type="button">Start Streaming</button>
     </div>
 
@@ -649,7 +659,7 @@
           <input
             type="number"
             id="deposit-amount-input"
-            placeholder="Amount in sats"
+            placeholder="Amount"
             min="1"
             step="1"
             aria-label="Amount in satoshis"
