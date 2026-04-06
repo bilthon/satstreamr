@@ -22,11 +22,10 @@ export function createInvite(payload: InvitePayload): string {
 
 /**
  * Build a complete shareable invite URL using the current page origin.
- * Returns a URL of the form: `<origin>/?join=<base64payload>`
+ * Returns a URL of the form: `<origin>/room.html?session=<sessionId>`
  */
 export function createInviteUrl(payload: InvitePayload): string {
-  const encoded = createInvite(payload);
-  return `${window.location.origin}/?join=${encoded}`;
+  return `${window.location.origin}/room.html?session=${encodeURIComponent(payload.sessionId)}`;
 }
 
 /**

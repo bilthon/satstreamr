@@ -1,6 +1,6 @@
 # Satstreamr MVP — Progress Tracker
 
-Last updated: 2026-04-04 (All MVP units complete — 13, 16, 18, 20, 21)
+Last updated: 2026-03-23 (Unit 09 + 10 merged; signaling protocol fix merged)
 
 ## Legend
 - ✅ Complete
@@ -21,18 +21,18 @@ Last updated: 2026-04-04 (All MVP units complete — 13, 16, 18, 20, 21)
 | 07 | Data Channel Setup | ✅ | DataChannel wrapper; ordered; devSend helper; merged |
 | 08 | Cashu Wallet Module (browser) | ✅ | 4 integration tests passing; merged |
 | 09 | WebSocket Reconnect & Session Persistence | ✅ | Merged; exponential backoff, session_rejoined ack, sessionStorage |
-| 10 | Token Transfer over Data Channel | ✅ | Gate 3 — PASSED 2026-03-26; P2PK token delivered over data channel |
-| 11 | Payment Scheduler | ✅ | Gate 4 — PASSED 2026-03-29; ~10s interval, self-scheduling setTimeout |
-| 12 | Session UI | ✅ | Elapsed timer, budget display, pulse animation, session-end summary overlay |
-| 13 | Coturn + ICE Restart | ✅ | HMAC TURN credentials, ICE restart state machine, 15s countdown UI |
-| 14 | ~~Screen Sharing~~ | ❌ | Dropped — post-MVP |
-| 15 | ~~Browser Detection~~ | ❌ | Dropped — post-MVP |
-| 16 | Cash-out via Lightning Invoice | ✅ | getMeltQuote + meltTokens, proof persistence, 600s countdown UI |
-| 17 | ~~Session Recording~~ | ❌ | Dropped — post-MVP |
-| 18 | Same-Mint Enforcement | ✅ | URL-normalized mint check, MintMismatchError, blocking overlay |
-| 19 | ~~Tutor Invite Flow~~ | ❌ | Dropped — post-MVP |
-| 20 | E2E Integration Test | ✅ | 16 tests: TURN credentials, mintUrl relay, payment-scheduler double-timeout failure |
-| 21 | Developer README | ✅ | Full developer quick-start; pip install cashu==0.19.2 |
+| 10 | Token Transfer over Data Channel | 🔄 | Code merged; Gate 3 browser verification pending |
+| 11 | Payment Scheduler | ⬜ | Gate 4 |
+| 12 | Session UI | ⬜ | |
+| 13 | Coturn + ICE Restart | ⬜ | |
+| 14 | Screen Sharing | ⬜ | |
+| 15 | Browser Detection | ⬜ | |
+| 16 | Cash-out via Lightning Invoice | ⬜ | |
+| 17 | Session Recording | ⬜ | |
+| 18 | Same-Mint Enforcement | ⬜ | |
+| 19 | Tutor Invite Flow | ⬜ | |
+| 20 | E2E Integration Test | ⬜ | |
+| 21 | Developer README | ⬜ | |
 
 ## Go/No-Go Gates
 
@@ -40,8 +40,8 @@ Last updated: 2026-04-04 (All MVP units complete — 13, 16, 18, 20, 21)
 |------|------|-----------|--------|
 | 1 | 03 | NUT-11 P2PK round-trip passes on live mint | ✅ |
 | 2 | 06 | WebRTC peer connection established between two browser tabs | ✅ |
-| 3 | 10 | Cashu token delivered over data channel, verified by recipient | ✅ |
-| 4 | 11 | Payment scheduler runs for 60s without missed chunks | ✅ |
+| 3 | 10 | Cashu token delivered over data channel, verified by recipient | 🔄 |
+| 4 | 11 | Payment scheduler runs for 60s without missed chunks | ⬜ |
 
 ## Repos
 

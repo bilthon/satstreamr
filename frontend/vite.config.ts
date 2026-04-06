@@ -14,8 +14,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         index: resolve(__dirname, 'index.html'),
-        tutor: resolve(__dirname, 'tutor.html'),
-        viewer: resolve(__dirname, 'viewer.html'),
+        room: resolve(__dirname, 'room.html'),
       },
     }
   },
