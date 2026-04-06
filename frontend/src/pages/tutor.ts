@@ -524,18 +524,37 @@ client.onMessage((msg: SignalingMessage) => {
     case 'session_rejoined': {
       // Tutor successfully rejoined an existing session — restore state
       // and trigger a fresh WebRTC offer so video resumes.
-      const rejoinedId = (msg as { sessionId: string }).sessionId;
-      sessionId = rejoinedId;
-      client.setSessionId(rejoinedId);
+      const rejoinedMsg = msg as import('../types/signaling.js').SessionRejoinedMessage;
+      sessionId = rejoinedMsg.sessionId;
+      client.setSessionId(rejoinedMsg.sessionId);
+
+      // Defensively persist session so storage stays consistent even if
+      // it was cleared during an intermediate error path.
+      saveSession({
+        sessionId: rejoinedMsg.sessionId,
+        peerId: '',
+        role: 'tutor',
+        chunkCount: totalChunksReceived,
+        totalSatsPaid: totalSatsReceived,
+      });
 
       // Hide rate config, show session info (same as handleSessionCreated)
       if (rateConfigEl !== null) rateConfigEl.style.display = 'none';
-      if (sessionIdEl !== null) sessionIdEl.textContent = rejoinedId;
+      if (sessionIdEl !== null) sessionIdEl.textContent = rejoinedMsg.sessionId;
       if (sessionContainerEl !== null) sessionContainerEl.style.display = 'block';
 
       ui.setStatus('rejoined session — starting media…');
 
-      // Start local media, then trigger a new offer to the viewer
+      // Release any stale media tracks before re-acquiring
+      if (localStream !== null) {
+        localStream.getTracks().forEach(t => t.stop());
+        localStream = null;
+      }
+
+      // Start local media, then trigger a new offer to the viewer.
+      // Note: sharedStartMedia only calls getUserMedia — it does not
+      // interact with the PeerConnection, so using the current `peer`
+      // reference is fine even though handleViewerJoined replaces it.
       void sharedStartMedia(peer, localVideoEl, ui.showError).then((stream) => {
         localStream = stream;
         if (stream !== null) {
