@@ -47,14 +47,10 @@
       /* ---- Wallet widget ---- */
       #wallet-widget {
         position: relative;
-        display: flex;
-        align-items: center;
-        gap: var(--space-4);
-        flex-wrap: wrap;
         background: var(--glass-bg);
         border: 1px solid var(--color-border-accent);
         border-radius: var(--radius-lg);
-        padding: 0.85rem 1.1rem;
+        padding: 1.5rem 1.75rem;
         margin-bottom: var(--space-8);
         box-shadow: var(--shadow-glow-bitcoin);
         overflow: hidden;
@@ -70,13 +66,28 @@
         background: var(--gradient-brand);
       }
 
+      .wallet-label {
+        font-size: var(--text-xs);
+        font-weight: 500;
+        color: var(--color-text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: var(--space-2);
+      }
+
       #balance-display {
+        font-family: var(--font-mono);
         font-size: var(--text-4xl);
         font-weight: 700;
-        font-family: var(--font-mono);
         color: var(--color-text-accent);
-        flex: 1;
-        font-variant-numeric: tabular-nums;
+        line-height: 1.2;
+        margin-bottom: var(--space-5);
+        letter-spacing: -0.02em;
+      }
+
+      .wallet-actions {
+        display: flex;
+        gap: var(--space-3);
       }
 
       .wallet-btn {
@@ -693,9 +704,12 @@
 
     <!-- Wallet widget -->
     <div id="wallet-widget">
-      <span id="balance-display">Balance: — <span class="sat">S</span></span>
-      <button class="wallet-btn" id="deposit-btn" type="button">Deposit</button>
-      <button class="wallet-btn" id="withdraw-btn" type="button">Withdraw</button>
+      <div class="wallet-label">Wallet Balance</div>
+      <div id="balance-display">— <span class="sat">S</span></div>
+      <div class="wallet-actions">
+        <button class="wallet-btn" id="deposit-btn" type="button">Deposit</button>
+        <button class="wallet-btn" id="withdraw-btn" type="button">Withdraw</button>
+      </div>
     </div>
 
     <!-- Token denomination breakdown (collapsible) -->
