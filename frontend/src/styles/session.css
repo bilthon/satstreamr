@@ -489,10 +489,25 @@ html {
 }
 
 .rate-config-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr;
   gap: var(--space-6);
-  flex-wrap: wrap;
+  align-items: start;
+}
+
+.rate-inputs-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.rate-derived-group {
+  display: flex;
+  flex-direction: column;
   align-items: flex-end;
+  justify-content: center;
+  gap: var(--space-3);
+  padding-top: var(--space-1);
 }
 
 .rate-config-label {
@@ -525,10 +540,24 @@ html {
   margin-top: var(--space-4);
 }
 
-.effective-rate {
+.effective-rate,
+.fee-overhead {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
   font-size: var(--text-sm);
   color: var(--color-text-secondary);
-  padding-bottom: 0.35rem;
+}
+
+.derived-label {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.derived-value {
+  color: var(--color-text-secondary);
 }
 
 .effective-rate strong {
@@ -536,14 +565,6 @@ html {
 }
 
 /* Fee overhead display */
-.fee-overhead {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: var(--text-sm);
-  color: var(--color-text-secondary);
-  margin-top: var(--space-2);
-}
 
 .fee-overhead .warn {
   color: var(--color-error);
@@ -556,6 +577,7 @@ html {
   justify-content: center;
   width: 1.25rem;
   height: 1.25rem;
+  flex-shrink: 0;
   border-radius: 50%;
   border: 1px solid var(--color-text-secondary);
   background: transparent;
@@ -856,6 +878,24 @@ html {
 .video-wrap-local label {
   font-size: 0.625rem;
   padding: 0.15rem 0.45rem;
+}
+
+/* Responsive: stack rate config on narrow screens */
+@media (max-width: 400px) {
+  .rate-config-row {
+    grid-template-columns: 1fr;
+  }
+
+  .rate-derived-group {
+    align-items: flex-start;
+  }
+
+  .effective-rate,
+  .fee-overhead {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
+  }
 }
 
 /* Responsive: smaller PiP on mobile */
