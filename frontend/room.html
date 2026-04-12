@@ -21,24 +21,30 @@
     <div id="rate-config" class="rate-config-card">
       <h2>Session Rate</h2>
       <div class="rate-config-row">
-        <label class="rate-config-label">
-          Sats per payment
-          <input type="number" id="rate-sats-input" value="2" min="1" class="rate-config-input" />
-        </label>
-        <label class="rate-config-label">
-          Interval (seconds)
-          <input type="number" id="rate-interval-input" value="10" min="5" class="rate-config-input" />
-        </label>
-        <div class="effective-rate">
-          Effective rate: <strong id="effective-rate-display">12.0</strong> <span class="sat">S</span>/min
+        <div class="rate-inputs-group">
+          <label class="rate-config-label">
+            Sats per payment
+            <input type="number" id="rate-sats-input" value="2" min="1" class="rate-config-input" />
+          </label>
+          <label class="rate-config-label">
+            Interval (seconds)
+            <input type="number" id="rate-interval-input" value="10" min="5" class="rate-config-input" />
+          </label>
         </div>
-        <div class="fee-overhead">
-          <span id="fee-overhead-display">Fee overhead: loading…</span>
-          <button id="fee-info-btn" type="button" class="info-icon-btn" aria-label="Fee info">i</button>
+        <div class="rate-derived-group">
+          <div class="effective-rate">
+            <span class="derived-label">Effective rate</span>
+            <span class="derived-value"><strong id="effective-rate-display">12.0</strong> <span class="sat">S</span>/min</span>
+          </div>
+          <div class="fee-overhead">
+            <span class="derived-label">Fee overhead</span>
+            <span class="derived-value" id="fee-overhead-display">loading…</span>
+            <button id="fee-info-btn" type="button" class="info-icon-btn" aria-label="Fee info">i</button>
+          </div>
         </div>
-        <div id="fee-info-panel" class="fee-info-panel">
-          Each payment cycle, the viewer sends a Cashu token which the tutor swaps with the mint to claim. This swap incurs a small fee. Larger payments per cycle reduce the fee overhead percentage.
-        </div>
+      </div>
+      <div id="fee-info-panel" class="fee-info-panel">
+        Each payment cycle, the viewer sends a Cashu token which the tutor swaps with the mint to claim. This swap incurs a small fee. Larger payments per cycle reduce the fee overhead percentage.
       </div>
       <button id="start-session-btn" type="button" class="btn-primary">Start Session</button>
     </div>

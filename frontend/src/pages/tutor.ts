@@ -365,13 +365,13 @@ function updateFeeOverheadDisplay(): void {
   if (feeOverheadDisplayEl === null) return;
   const fee = estimatedFeePerCycle();
   if (fee === 0) {
-    feeOverheadDisplayEl.textContent = 'Fee overhead: none';
+    feeOverheadDisplayEl.textContent = 'none';
     feeOverheadDisplayEl.classList.remove('warn');
     return;
   }
   const { rateSatsPerInterval } = getRateConfig();
   const pct = ((fee / rateSatsPerInterval) * 100).toFixed(0);
-  feeOverheadDisplayEl.innerHTML = `Fee overhead: ~${fee} <span class="sat">S</span>/cycle (~${pct}%)`;
+  feeOverheadDisplayEl.innerHTML = `~${fee} <span class="sat">S</span>/cycle (~${pct}%)`;
   if (fee / rateSatsPerInterval > 0.3) {
     feeOverheadDisplayEl.classList.add('warn');
   } else {
@@ -398,7 +398,7 @@ void buildWallet().then(({ feePpk }) => {
 }).catch((err: unknown) => {
   console.warn('[tutor] could not fetch mint fee info:', err);
   if (feeOverheadDisplayEl !== null) {
-    feeOverheadDisplayEl.textContent = 'Fee overhead: unavailable';
+    feeOverheadDisplayEl.textContent = 'unavailable';
   }
 });
 
