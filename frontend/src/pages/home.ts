@@ -4,6 +4,7 @@ import { getMeltQuote, meltTokens } from '../lib/cashu-wallet.js';
 import { requestMintQuote, pollForPayment, mintProofsFromQuote } from '../lib/deposit.js';
 import { parseInvite } from '../lib/session-invite.js';
 import { clearSession } from '../lib/session-storage.js';
+import { renderSessionHistory } from '../lib/session-history.js';
 
 // ---------------------------------------------------------------------------
 // UI element references
@@ -640,4 +641,13 @@ if (joinParam !== null && invitePanelEl !== null) {
       });
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Session history
+// ---------------------------------------------------------------------------
+
+const sessionHistoryListEl = document.getElementById('session-history-list');
+if (sessionHistoryListEl !== null) {
+  renderSessionHistory(sessionHistoryListEl);
 }

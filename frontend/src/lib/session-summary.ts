@@ -1,9 +1,13 @@
 import { clearSession } from './session-storage.js';
+import { appendSessionRecord } from './session-history.js';
+import type { Role } from '../types/session.js';
 
 export interface SessionSummaryConfig {
   onBeforeSummary?: () => void;
   onAfterSummary?: () => void;
   statsElId?: string;
+  sessionId?: string | undefined;
+  role?: Role | undefined;
 }
 
 export interface SessionSummary {
@@ -70,6 +74,17 @@ export function createSessionSummary(config?: SessionSummaryConfig): SessionSumm
     config?.onBeforeSummary?.();
 
     const elapsed = getElapsedSeconds();
+
+    if (config?.sessionId !== undefined && config?.role !== undefined) {
+      appendSessionRecord({
+        sessionId: config.sessionId,
+        role: config.role,
+        startedAt: new Date(Date.now() - elapsed * 1000).toISOString(),
+        durationSeconds: elapsed,
+        totalSats,
+        totalChunks,
+      });
+    }
 
     if (summaryDurationEl !== null) {
       summaryDurationEl.textContent = formatElapsed(elapsed);

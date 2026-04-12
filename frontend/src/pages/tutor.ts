@@ -72,6 +72,8 @@ const sessionSummary = createSessionSummary({
   onBeforeSummary: () => { stopElapsedTimer(); },
   onAfterSummary: () => { wireCashOut(); },
   statsElId: 'tutor-stats',
+  get sessionId() { return sessionId ?? undefined; },
+  role: 'tutor',
 });
 
 /** Start the elapsed timer. Called when the data channel opens. */
