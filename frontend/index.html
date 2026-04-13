@@ -522,6 +522,7 @@
       }
 
       #deposit-panel {
+        position: relative;
         background: var(--color-bg-elevated);
         border: 1px solid var(--color-border-default);
         border-radius: var(--radius-xl);
@@ -569,6 +570,14 @@
         box-shadow: 0 0 0 3px rgba(247,147,26,0.12);
       }
 
+      #deposit-amount-input:disabled {
+        background: var(--color-bg-surface);
+        color: var(--color-text-muted);
+        border-color: var(--color-border-default);
+        cursor: not-allowed;
+        opacity: 0.7;
+      }
+
       /* Invoice display */
       #deposit-invoice-area {
         display: none;
@@ -599,7 +608,7 @@
         word-break: break-all;
         white-space: pre-wrap;
         margin: 0;
-        max-height: 5.5rem;
+        max-height: 6.5rem;
         overflow-y: auto;
       }
 
@@ -662,6 +671,20 @@
         border: 1px solid rgba(239, 68, 68, 0.25);
       }
 
+      #deposit-reset-countdown {
+        display: none;
+        margin-top: calc(var(--space-2) * -1);
+        margin-bottom: var(--space-4);
+        text-align: center;
+        font-size: var(--text-xs);
+        color: var(--color-text-muted);
+        opacity: 0.8;
+      }
+
+      #deposit-reset-countdown.is-visible {
+        display: block;
+      }
+
       /* Spinner */
       .deposit-spinner {
         display: inline-block;
@@ -682,7 +705,8 @@
       /* Footer buttons */
       #deposit-footer {
         display: flex;
-        justify-content: flex-end;
+        justify-content: space-between;
+        align-items: center;
         gap: var(--space-2);
       }
 
@@ -766,6 +790,70 @@
         color: var(--color-text-accent);
         margin-left: auto;
         flex-shrink: 0;
+      }
+
+      /* ---- Deposit success celebration ---- */
+      #deposit-success-area {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: var(--space-8) 0;
+        margin-bottom: 1.25rem;
+      }
+
+      #deposit-success-area.is-visible {
+        display: flex;
+      }
+
+      #deposit-checkmark {
+        opacity: 0;
+        transform: scale(0.3);
+      }
+
+      #deposit-success-area.is-visible #deposit-checkmark {
+        animation: deposit-check-pop var(--duration-slow) var(--ease-spring) forwards;
+      }
+
+      .checkmark-circle {
+        stroke-dasharray: 227;
+        stroke-dashoffset: 227;
+      }
+
+      #deposit-success-area.is-visible .checkmark-circle {
+        animation: deposit-circle-draw 600ms var(--ease-out) forwards;
+      }
+
+      .checkmark-tick {
+        stroke-dasharray: 60;
+        stroke-dashoffset: 60;
+      }
+
+      #deposit-success-area.is-visible .checkmark-tick {
+        animation: deposit-tick-draw 400ms var(--ease-out) 350ms forwards;
+      }
+
+      @keyframes deposit-check-pop {
+        0%   { opacity: 0; transform: scale(0.3); }
+        60%  { opacity: 1; transform: scale(1.08); }
+        100% { opacity: 1; transform: scale(1); }
+      }
+
+      @keyframes deposit-circle-draw {
+        to { stroke-dashoffset: 0; }
+      }
+
+      @keyframes deposit-tick-draw {
+        to { stroke-dashoffset: 0; }
+      }
+
+      .deposit-confetti-canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 1;
       }
 
       /* ---- Reduced motion ---- */
@@ -890,12 +978,22 @@
           <button id="deposit-copy-btn" type="button">Copy Invoice</button>
         </div>
 
+        <!-- Success celebration (replaces invoice area on confirmed deposit) -->
+        <div id="deposit-success-area" aria-live="polite">
+          <svg id="deposit-checkmark" viewBox="0 0 80 80" width="100" height="100" aria-label="Payment confirmed">
+            <circle class="checkmark-circle" cx="40" cy="40" r="36" fill="none" stroke="var(--color-success)" stroke-width="3"/>
+            <path class="checkmark-tick" d="M24 42 L35 53 L56 28" fill="none" stroke="var(--color-success)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+
         <!-- Status messages -->
         <div id="deposit-status" role="status" aria-live="polite"></div>
+        <div id="deposit-reset-countdown" aria-live="polite"></div>
 
         <!-- Footer -->
         <div id="deposit-footer">
-          <button class="btn-primary" id="deposit-close-btn" type="button" style="background:#6b7280">Close</button>
+          <button class="btn-withdraw btn-withdraw-ghost" id="deposit-reset-btn" type="button">Reset</button>
+          <button class="btn-withdraw btn-withdraw-ghost" id="deposit-close-btn" type="button">Close</button>
         </div>
       </div>
     </div>
