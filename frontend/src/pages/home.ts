@@ -17,7 +17,6 @@ const withdrawBtnEl = document.getElementById('withdraw-btn') as HTMLButtonEleme
 // Withdraw panel elements
 const withdrawPanelEl = document.getElementById('withdraw-panel');
 const withdrawInvoiceInputEl = document.getElementById('withdraw-invoice-input') as HTMLTextAreaElement | null;
-const withdrawQuoteDisplayEl = document.getElementById('withdraw-quote-display');
 const withdrawStatusEl = document.getElementById('withdraw-status');
 const withdrawGetQuoteBtnEl = document.getElementById('withdraw-get-quote-btn') as HTMLButtonElement | null;
 const withdrawPayBtnEl = document.getElementById('withdraw-pay-btn') as HTMLButtonElement | null;
@@ -535,24 +534,10 @@ function hideWithdrawStatus(): void {
   withdrawStatusEl.className = '';
 }
 
-function showWithdrawQuote(amount: number, fee: number): void {
-  if (withdrawQuoteDisplayEl === null) return;
-  const total = amount + fee;
-  withdrawQuoteDisplayEl.innerHTML = `Amount: ${amount} <span class="sat">S</span>, Fee: ${fee} <span class="sat">S</span>, Total: ${total} <span class="sat">S</span>`;
-  withdrawQuoteDisplayEl.style.display = 'block';
-}
-
-function hideWithdrawQuote(): void {
-  if (withdrawQuoteDisplayEl === null) return;
-  withdrawQuoteDisplayEl.style.display = 'none';
-  withdrawQuoteDisplayEl.textContent = '';
-}
-
 function resetWithdrawPanel(): void {
   if (withdrawInvoiceInputEl !== null) withdrawInvoiceInputEl.value = '';
   if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = true;
   if (withdrawGetQuoteBtnEl !== null) withdrawGetQuoteBtnEl.disabled = false;
-  hideWithdrawQuote();
   hideWithdrawStatus();
   if (withdrawMaxEstimateEl !== null) {
     withdrawMaxEstimateEl.style.display = 'none';
@@ -711,7 +696,6 @@ if (withdrawGetQuoteBtnEl !== null) {
     }
 
     // Reset prior quote state
-    hideWithdrawQuote();
     if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = true;
     if (withdrawGetQuoteBtnEl !== null) withdrawGetQuoteBtnEl.disabled = true;
 
@@ -726,7 +710,6 @@ if (withdrawGetQuoteBtnEl !== null) {
       const total = quote.amount + quote.fee_reserve;
       const balance = getBalance();
 
-      showWithdrawQuote(quote.amount, quote.fee_reserve);
       refreshEstimateWithQuote(quote.fee_reserve);
 
       if (balance < total) {
