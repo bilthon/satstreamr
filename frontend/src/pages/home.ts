@@ -780,9 +780,14 @@ if (withdrawPayBtnEl !== null) {
 
       if (result.paid) {
         // Add change proofs back to wallet (NUT-08: unused fee reserve)
+        const changeSats = result.change.reduce((s, p) => s + p.amount, 0);
         if (result.change.length > 0) addProofs(result.change);
-        const preimage = result.payment_preimage ?? '(none)';
-        showWithdrawStatus(`Payment sent! Preimage: ${preimage}`, 'success');
+
+        // Clear the invoice input
+        if (withdrawInvoiceInputEl !== null) withdrawInvoiceInputEl.value = '';
+
+        const changeNote = changeSats > 0 ? ` (${changeSats} sats fee change returned)` : '';
+        showWithdrawStatus(`Payment sent!${changeNote}`, 'success');
         if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = true;
         if (withdrawGetQuoteBtnEl !== null) withdrawGetQuoteBtnEl.disabled = false;
       } else {

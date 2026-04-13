@@ -319,10 +319,12 @@ async function handlePayInvoice(proofs: Proof[]): Promise<void> {
     const result = await meltTokens(invoice, quoteId, proofs);
     if (result.paid) {
       // Add change proofs back to wallet (NUT-08: unused fee reserve)
+      const changeSats = result.change.reduce((s, p) => s + p.amount, 0);
       if (result.change.length > 0) addProofs(result.change);
       clearInvoiceCountdown();
-      const preimage = result.payment_preimage ?? '(none)';
-      setCashoutStatus(`\u2713 Payment sent! Preimage: ${preimage}`);
+      if (invoiceInputEl !== null) invoiceInputEl.value = '';
+      const changeNote = changeSats > 0 ? ` (${changeSats} sats fee change returned)` : '';
+      setCashoutStatus(`\u2713 Payment sent!${changeNote}`);
       // Button stays disabled — payment is complete
     } else {
       setCashoutStatus('Payment not confirmed by mint. Please retry.', true);
