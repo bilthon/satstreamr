@@ -779,11 +779,12 @@ if (withdrawPayBtnEl !== null) {
       const result = await meltTokens(invoice, quoteId, selectedProofs);
 
       if (result.paid) {
+        // Add change proofs back to wallet (NUT-08: unused fee reserve)
+        if (result.change.length > 0) addProofs(result.change);
         const preimage = result.payment_preimage ?? '(none)';
         showWithdrawStatus(`Payment sent! Preimage: ${preimage}`, 'success');
         if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = true;
         if (withdrawGetQuoteBtnEl !== null) withdrawGetQuoteBtnEl.disabled = false;
-        // Balance already updated by spendProofs removing proofs from the store
       } else {
         // Mint returned paid: false — return proofs
         addProofs(selectedProofs);

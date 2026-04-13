@@ -318,6 +318,8 @@ async function handlePayInvoice(proofs: Proof[]): Promise<void> {
   try {
     const result = await meltTokens(invoice, quoteId, proofs);
     if (result.paid) {
+      // Add change proofs back to wallet (NUT-08: unused fee reserve)
+      if (result.change.length > 0) addProofs(result.change);
       clearInvoiceCountdown();
       const preimage = result.payment_preimage ?? '(none)';
       setCashoutStatus(`\u2713 Payment sent! Preimage: ${preimage}`);
