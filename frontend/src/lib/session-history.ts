@@ -70,7 +70,7 @@ export function renderSessionHistory(containerEl: HTMLElement): void {
   const rows = records.map(r => `
     <div class="session-history-row">
       <span class="session-history-date">${formatDate(r.startedAt)}</span>
-      <span class="session-history-badge ${r.role}">${r.role}</span>
+      <span class="session-history-badge ${r.role}">${r.role.toLowerCase() === 'tutor' ? 'Earned' : 'Spent'}</span>
       <span class="session-history-duration">${formatDuration(r.durationSeconds)}</span>
       <span class="session-history-sats">${r.totalSats.toLocaleString()} <span class="sat">S</span></span>
     </div>`).join('');
