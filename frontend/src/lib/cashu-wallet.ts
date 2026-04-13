@@ -170,14 +170,18 @@ export async function claimProofs(
  * @returns Quote object containing `quote` ID, `amount`, and `fee_reserve`.
  */
 export async function getMeltQuote(
-  invoice: string
-): Promise<{ quote: string; amount: number; fee_reserve: number }> {
+  invoice: string,
+  proofs?: Proof[]
+): Promise<{ quote: string; amount: number; fee_reserve: number; inputFee: number }> {
   const { wallet } = await buildWallet();
   const meltQuote = await wallet.createMeltQuote(invoice);
+  const feeProofs = proofs ?? getProofs();
+  const inputFee = wallet.getFeesForProofs(feeProofs);
   return {
     quote: meltQuote.quote,
     amount: meltQuote.amount,
     fee_reserve: meltQuote.fee_reserve,
+    inputFee,
   };
 }
 

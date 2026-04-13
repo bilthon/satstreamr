@@ -647,26 +647,19 @@ if (withdrawPayBtnEl !== null) {
       return;
     }
 
-    const total = quote.amount + quote.fee_reserve;
+    const total = quote.amount + quote.fee_reserve + quote.inputFee;
     const balance = getBalance();
 
     if (balance < total) {
-      void estimateMaxWithdrawable().then(({ inputFee }) => {
-        const suggested = balance - quote.fee_reserve - inputFee;
-        if (suggested > 0) {
-          showWithdrawStatus(
-            `Balance too low for this invoice. Try requesting ~${suggested} sats instead.`,
-            'warning'
-          );
-        } else {
-          showWithdrawStatus('Balance too low to cover fees.', 'error');
-        }
-      }).catch(() => {
+      const suggested = balance - quote.fee_reserve - quote.inputFee;
+      if (suggested > 0) {
         showWithdrawStatus(
-          `Insufficient balance — you have ${balance}, need ${total}`,
-          'error'
+          `Balance too low for this invoice. Try requesting ~${suggested} sats instead.`,
+          'warning'
         );
-      });
+      } else {
+        showWithdrawStatus('Balance too low to cover fees.', 'error');
+      }
       if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = false;
       return;
     }

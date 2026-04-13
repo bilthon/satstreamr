@@ -300,12 +300,14 @@ async function handlePayInvoice(proofs: Proof[]): Promise<void> {
   let quoteId: string;
   let amount: number;
   let feeReserve: number;
+  let inputFee: number;
 
   try {
-    const quote = await getMeltQuote(invoice);
+    const quote = await getMeltQuote(invoice, proofs);
     quoteId = quote.quote;
     amount = quote.amount;
     feeReserve = quote.fee_reserve;
+    inputFee = quote.inputFee;
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     setCashoutStatus(msg, true);
@@ -313,7 +315,18 @@ async function handlePayInvoice(proofs: Proof[]): Promise<void> {
     return;
   }
 
-  setCashoutStatus(`Paying ${String(amount)} <span class="sat">S</span> + up to ${String(feeReserve)} <span class="sat">S</span> fee\u2026`, false, true);
+  const totalNeeded = amount + feeReserve + inputFee;
+  const proofTotal = proofs.reduce((s, p) => s + p.amount, 0);
+  if (proofTotal < totalNeeded) {
+    setCashoutStatus(
+      `Insufficient proofs — have ${proofTotal}, need ${totalNeeded} (${amount} + ${feeReserve} fee + ${inputFee} input fee).`,
+      true
+    );
+    payInvoiceBtnEl.disabled = false;
+    return;
+  }
+
+  setCashoutStatus(`Paying ${String(amount)} <span class="sat">S</span> + up to ${String(feeReserve + inputFee)} <span class="sat">S</span> fee\u2026`, false, true);
 
   try {
     const result = await meltTokens(invoice, quoteId, proofs);
