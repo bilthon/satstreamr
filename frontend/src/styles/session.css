@@ -113,21 +113,37 @@ html {
   font-variant-numeric: tabular-nums;
 }
 
-#budget-display.low {
+/* Budget display — warning / countdown states */
+#budget-display.warning {
+  color: var(--color-warning);
+}
+
+#budget-display.countdown {
   color: var(--color-error);
 }
 
 /* Budget low warning banner (viewer-only) */
+@keyframes amber-border-pulse {
+  0%, 100% { border-color: rgba(240, 196, 25, 0.25); }
+  50%      { border-color: rgba(240, 196, 25, 0.6); }
+}
+
+@keyframes countdown-pop {
+  0%   { opacity: 0; transform: scale(0.5); }
+  50%  { opacity: 1; transform: scale(1.2); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
 #budget-low-banner {
   display: none;
   width: 100%;
   box-sizing: border-box;
   padding: var(--space-3) var(--space-4);
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  border-left: 3px solid var(--color-error);
+  background: rgba(240, 196, 25, 0.08);
+  border: 1px solid rgba(240, 196, 25, 0.25);
+  border-left: 3px solid var(--color-warning);
   border-radius: var(--radius-sm);
-  color: var(--color-error);
+  color: var(--color-warning);
   font-weight: 600;
   font-size: var(--text-sm);
   text-align: center;
@@ -135,15 +151,37 @@ html {
   animation: error-slide-in var(--duration-normal) var(--ease-out) both;
 }
 
-#budget-low-banner.visible {
-  display: block;
+#budget-low-banner.warning-phase {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  animation: error-slide-in var(--duration-normal) var(--ease-out) both,
+             amber-border-pulse 2s ease-in-out infinite;
 }
 
-#budget-low-banner .banner-link {
-  color: var(--color-text-accent);
-  text-decoration: underline;
-  cursor: pointer;
-  margin-left: var(--space-2);
+#budget-low-banner.countdown-phase {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.35);
+  border-left-color: var(--color-error);
+  color: var(--color-error);
+}
+
+#countdown-display {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  font-weight: 800;
+  min-width: 1.5em;
+  font-variant-numeric: tabular-nums;
+}
+
+#countdown-display .count-digit {
+  display: inline-block;
+  animation: countdown-pop 400ms var(--ease-spring) both;
 }
 
 /* ------------------------------------------------------------
