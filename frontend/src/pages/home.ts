@@ -332,6 +332,7 @@ function launchDepositConfetti(): () => void {
 
 function resetDepositPanel(): void {
   if (depositAmountInputEl !== null) depositAmountInputEl.value = '';
+  if (depositAmountInputEl !== null) depositAmountInputEl.disabled = false;
   if (depositGenerateBtnEl !== null) depositGenerateBtnEl.disabled = false;
   hideDepositInvoice();
   cancelCelebration();
@@ -419,12 +420,14 @@ if (depositGenerateBtnEl !== null) {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         showDepositStatus(`Failed to generate invoice: ${message}`, 'error');
+        if (depositAmountInputEl !== null) depositAmountInputEl.disabled = false;
         depositGenerateBtnEl.disabled = false;
         return;
       }
 
       showDepositInvoice(invoice);
       showDepositStatus('Waiting for payment…', 'waiting');
+      if (depositAmountInputEl !== null) depositAmountInputEl.disabled = true;
 
       let paid: boolean;
       try {
@@ -432,12 +435,14 @@ if (depositGenerateBtnEl !== null) {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         showDepositStatus(`Payment check failed: ${message}`, 'error');
+        if (depositAmountInputEl !== null) depositAmountInputEl.disabled = false;
         depositGenerateBtnEl.disabled = false;
         return;
       }
 
       if (!paid) {
         showDepositStatus('Invoice expired — please try again.', 'expired');
+        if (depositAmountInputEl !== null) depositAmountInputEl.disabled = false;
         depositGenerateBtnEl.disabled = false;
         return;
       }
@@ -447,12 +452,14 @@ if (depositGenerateBtnEl !== null) {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         showDepositStatus(`Deposit confirmed but minting failed: ${message}`, 'error');
+        if (depositAmountInputEl !== null) depositAmountInputEl.disabled = false;
         depositGenerateBtnEl.disabled = false;
         return;
       }
 
       // Balance is updated reactively via onBalanceChange — celebrate!
       showDepositCelebration(amount);
+      if (depositAmountInputEl !== null) depositAmountInputEl.disabled = false;
       depositGenerateBtnEl.disabled = false;
     })();
   });
