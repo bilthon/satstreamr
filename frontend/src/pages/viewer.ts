@@ -88,7 +88,7 @@ function getRemainingSeconds(balanceSats: number): number {
 
 /** Transition into a low-funds phase, updating DOM classes and content. */
 function enterPhase(phase: LowFundsPhase, remainingSecs?: number): void {
-  if (phase === lowFundsPhase) return;
+  if (phase === lowFundsPhase && phase !== 'countdown') return;
   lowFundsPhase = phase;
 
   if (budgetLowBannerEl === null) return;
@@ -415,6 +415,7 @@ function setupPeerHandlers(): void {
 
       scheduler.onBudgetExhausted(() => {
         ui.showError('Budget exhausted \u2014 session ended');
+        stopCountdownTimer();
         scheduler?.stop();
         peer.close();
         if (localStream !== null) {
@@ -549,6 +550,8 @@ async function handleOffer(offer: RTCSessionDescriptionInit): Promise<void> {
   peer = recreatePeer(peer);
   setupPeerHandlers();
 
+  stopCountdownTimer();
+  lowFundsPhase = 'normal';
   scheduler?.stop();
   scheduler = null;
   dataChannel = null;
