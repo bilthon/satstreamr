@@ -1,6 +1,6 @@
 import QRCode from 'qrcode';
 import { getBalance, onBalanceChange, spendProofs, addProofs, getProofs } from '../lib/wallet-store.js';
-import { getMeltQuote, meltTokens } from '../lib/cashu-wallet.js';
+import { getMeltQuote, meltTokens, estimateMaxWithdrawable } from '../lib/cashu-wallet.js';
 import { requestMintQuote, pollForPayment, mintProofsFromQuote } from '../lib/deposit.js';
 import { parseInvite } from '../lib/session-invite.js';
 import { clearSession } from '../lib/session-storage.js';
@@ -17,11 +17,10 @@ const withdrawBtnEl = document.getElementById('withdraw-btn') as HTMLButtonEleme
 // Withdraw panel elements
 const withdrawPanelEl = document.getElementById('withdraw-panel');
 const withdrawInvoiceInputEl = document.getElementById('withdraw-invoice-input') as HTMLTextAreaElement | null;
-const withdrawQuoteDisplayEl = document.getElementById('withdraw-quote-display');
 const withdrawStatusEl = document.getElementById('withdraw-status');
-const withdrawGetQuoteBtnEl = document.getElementById('withdraw-get-quote-btn') as HTMLButtonElement | null;
 const withdrawPayBtnEl = document.getElementById('withdraw-pay-btn') as HTMLButtonElement | null;
 const withdrawCloseBtnEl = document.getElementById('withdraw-close-btn') as HTMLButtonElement | null;
+const withdrawMaxEstimateEl = document.getElementById('withdraw-max-estimate');
 
 const startStreamingBtnEl = document.getElementById('start-streaming-btn') as HTMLButtonElement | null;
 
@@ -505,19 +504,6 @@ if (depositGenerateBtnEl !== null) {
 // Withdraw panel — Unit 26
 // ---------------------------------------------------------------------------
 
-/** Withdraw flow state */
-interface WithdrawState {
-  quoteId: string | null;
-  quoteAmount: number;
-  quoteFeeReserve: number;
-}
-
-const withdrawState: WithdrawState = {
-  quoteId: null,
-  quoteAmount: 0,
-  quoteFeeReserve: 0,
-};
-
 type StatusVariant = 'info' | 'success' | 'error' | 'warning';
 
 function showWithdrawStatus(message: string, variant: StatusVariant = 'info'): void {
@@ -534,34 +520,73 @@ function hideWithdrawStatus(): void {
   withdrawStatusEl.className = '';
 }
 
-function showWithdrawQuote(amount: number, fee: number): void {
-  if (withdrawQuoteDisplayEl === null) return;
-  const total = amount + fee;
-  withdrawQuoteDisplayEl.innerHTML = `Amount: ${amount} <span class="sat">S</span>, Fee: ${fee} <span class="sat">S</span>, Total: ${total} <span class="sat">S</span>`;
-  withdrawQuoteDisplayEl.style.display = 'block';
-}
-
-function hideWithdrawQuote(): void {
-  if (withdrawQuoteDisplayEl === null) return;
-  withdrawQuoteDisplayEl.style.display = 'none';
-  withdrawQuoteDisplayEl.textContent = '';
-}
-
 function resetWithdrawPanel(): void {
   if (withdrawInvoiceInputEl !== null) withdrawInvoiceInputEl.value = '';
-  if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = true;
-  if (withdrawGetQuoteBtnEl !== null) withdrawGetQuoteBtnEl.disabled = false;
-  hideWithdrawQuote();
+  if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = false;
   hideWithdrawStatus();
-  withdrawState.quoteId = null;
-  withdrawState.quoteAmount = 0;
-  withdrawState.quoteFeeReserve = 0;
+  if (withdrawMaxEstimateEl !== null) {
+    withdrawMaxEstimateEl.style.display = 'none';
+    withdrawMaxEstimateEl.innerHTML = '';
+  }
 }
+
+let withdrawEstimateGen = 0;
+
 
 function openWithdrawPanel(): void {
   resetWithdrawPanel();
   if (withdrawPanelEl !== null) withdrawPanelEl.style.display = 'block';
   withdrawInvoiceInputEl?.focus();
+
+  // Compute and display the max withdrawable estimate
+  const gen = ++withdrawEstimateGen;
+  void estimateMaxWithdrawable().then(({ maxAmount, inputFee, lightningBuffer, balance }) => {
+    if (gen !== withdrawEstimateGen) return; // stale — panel was closed/reopened
+    if (withdrawMaxEstimateEl === null) return;
+
+    if (balance === 0) {
+      withdrawMaxEstimateEl.style.display = 'none';
+      return;
+    }
+
+    if (maxAmount <= 0) {
+      withdrawMaxEstimateEl.style.display = 'block';
+      withdrawMaxEstimateEl.innerHTML =
+        `<div class="max-main">Balance: ${balance} <span class="sat">S</span> — fees may exceed this, but try with a small invoice.</div>`;
+      return;
+    }
+
+    withdrawMaxEstimateEl.style.display = 'block';
+    withdrawMaxEstimateEl.innerHTML = `
+      <div class="max-main">
+        <span class="max-amount">Maximum withdrawable amount: ~${maxAmount} <span class="sat">S</span></span>
+        <button class="copy-amount-btn" type="button">Copy</button>
+      </div>
+      <div class="max-breakdown">
+        ${balance} <span class="sat">S</span> balance
+        \u2212 ${inputFee} <span class="sat">S</span> proof fee
+        \u2212 ${lightningBuffer} <span class="sat">S</span> lightning buffer
+      </div>
+    `;
+
+    const copyBtn = withdrawMaxEstimateEl.querySelector('.copy-amount-btn');
+    if (copyBtn !== null) {
+      copyBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(String(maxAmount)).then(() => {
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1800);
+        }).catch((err: unknown) => {
+          console.error('[withdraw] clipboard write failed', err);
+        });
+      });
+    }
+  }).catch((err: unknown) => {
+    if (gen !== withdrawEstimateGen) return;
+    console.warn('[withdraw] could not estimate max withdrawable:', err);
+    if (withdrawMaxEstimateEl !== null) {
+      withdrawMaxEstimateEl.style.display = 'none';
+    }
+  });
 }
 
 function closeWithdrawPanel(): void {
@@ -592,9 +617,9 @@ if (withdrawCloseBtnEl !== null) {
   });
 }
 
-// Get Quote button
-if (withdrawGetQuoteBtnEl !== null) {
-  withdrawGetQuoteBtnEl.addEventListener('click', async () => {
+// Pay Invoice button — fetches quote + pays in one step
+if (withdrawPayBtnEl !== null) {
+  withdrawPayBtnEl.addEventListener('click', async () => {
     const invoice = withdrawInvoiceInputEl?.value.trim() ?? '';
 
     if (invoice.length === 0) {
@@ -602,104 +627,74 @@ if (withdrawGetQuoteBtnEl !== null) {
       return;
     }
 
-    // Prefix warning
+    // Prefix warning (non-blocking)
     const prefixWarning = checkInvoicePrefix(invoice);
     if (prefixWarning !== null) {
       showWithdrawStatus(prefixWarning, 'warning');
-    } else {
-      hideWithdrawStatus();
     }
 
-    // Reset prior quote state
-    hideWithdrawQuote();
     if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = true;
-    if (withdrawGetQuoteBtnEl !== null) withdrawGetQuoteBtnEl.disabled = true;
 
+    // Step 1: Fetch melt quote
+    let quote;
     try {
       showWithdrawStatus('Fetching quote…', 'info');
-      const quote = await getMeltQuote(invoice);
-
-      withdrawState.quoteId = quote.quote;
-      withdrawState.quoteAmount = quote.amount;
-      withdrawState.quoteFeeReserve = quote.fee_reserve;
-
-      const total = quote.amount + quote.fee_reserve;
-      const balance = getBalance();
-
-      showWithdrawQuote(quote.amount, quote.fee_reserve);
-
-      if (balance < total) {
-        showWithdrawStatus(
-          `Insufficient balance — you have ${balance}, need ${total}`,
-          'error'
-        );
-        if (withdrawGetQuoteBtnEl !== null) withdrawGetQuoteBtnEl.disabled = false;
-        return;
-      }
-
-      hideWithdrawStatus();
-      if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = false;
+      quote = await getMeltQuote(invoice);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       showWithdrawStatus(`Failed to get quote: ${message}`, 'error');
-    } finally {
-      if (withdrawGetQuoteBtnEl !== null) withdrawGetQuoteBtnEl.disabled = false;
-    }
-  });
-}
-
-// Pay Invoice button
-if (withdrawPayBtnEl !== null) {
-  withdrawPayBtnEl.addEventListener('click', async () => {
-    const invoice = withdrawInvoiceInputEl?.value.trim() ?? '';
-    const { quoteId, quoteAmount, quoteFeeReserve } = withdrawState;
-
-    if (quoteId === null || invoice.length === 0) {
-      showWithdrawStatus('Please get a quote first.', 'error');
+      if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = false;
       return;
     }
 
-    const totalNeeded = quoteAmount + quoteFeeReserve;
+    const total = quote.amount + quote.fee_reserve + quote.inputFee;
+    const balance = getBalance();
 
-    // Disable both action buttons while paying
-    if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = true;
-    if (withdrawGetQuoteBtnEl !== null) withdrawGetQuoteBtnEl.disabled = true;
+    if (balance < total) {
+      const suggested = balance - quote.fee_reserve - quote.inputFee;
+      if (suggested > 0) {
+        showWithdrawStatus(
+          `Balance too low for this invoice. Try requesting ~${suggested} sats instead.`,
+          'warning'
+        );
+      } else {
+        showWithdrawStatus('Balance too low to cover fees.', 'error');
+      }
+      if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = false;
+      return;
+    }
 
-    showWithdrawStatus('Paying…', 'info');
-
+    // Step 2: Select proofs and pay
     let selectedProofs;
     try {
-      selectedProofs = spendProofs(totalNeeded);
+      selectedProofs = spendProofs(total);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       showWithdrawStatus(`Insufficient balance — ${message}`, 'error');
-      if (withdrawGetQuoteBtnEl !== null) withdrawGetQuoteBtnEl.disabled = false;
       if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = false;
       return;
     }
 
     try {
-      const result = await meltTokens(invoice, quoteId, selectedProofs);
+      showWithdrawStatus('Paying…', 'info');
+      const result = await meltTokens(invoice, quote.quote, selectedProofs);
 
       if (result.paid) {
-        const preimage = result.payment_preimage ?? '(none)';
-        showWithdrawStatus(`Payment sent! Preimage: ${preimage}`, 'success');
-        if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = true;
-        if (withdrawGetQuoteBtnEl !== null) withdrawGetQuoteBtnEl.disabled = false;
-        // Balance already updated by spendProofs removing proofs from the store
+        const changeSats = result.change.reduce((s, p) => s + p.amount, 0);
+        if (result.change.length > 0) addProofs(result.change);
+        if (withdrawInvoiceInputEl !== null) withdrawInvoiceInputEl.value = '';
+
+        const changeNote = changeSats > 0 ? ` (${changeSats} sats fee change returned)` : '';
+        showWithdrawStatus(`Payment sent!${changeNote}`, 'success');
       } else {
-        // Mint returned paid: false — return proofs
         addProofs(selectedProofs);
         showWithdrawStatus('Payment did not complete — proofs returned to wallet. Please try again.', 'error');
-        if (withdrawGetQuoteBtnEl !== null) withdrawGetQuoteBtnEl.disabled = false;
         if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = false;
       }
     } catch (err) {
-      // Melt failed — return the proofs so balance is unchanged
       addProofs(selectedProofs);
       const message = err instanceof Error ? err.message : String(err);
       showWithdrawStatus(`Payment failed: ${message} — proofs returned to wallet.`, 'error');
-      if (withdrawGetQuoteBtnEl !== null) withdrawGetQuoteBtnEl.disabled = false;
       if (withdrawPayBtnEl !== null) withdrawPayBtnEl.disabled = false;
     }
   });

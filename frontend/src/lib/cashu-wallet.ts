@@ -163,84 +163,81 @@ export async function claimProofs(
 /**
  * Fetches a melt quote from the mint for a BOLT11 invoice.
  *
+ * Uses the cashu-ts wallet.createMeltQuote() which returns a full
+ * MeltQuoteResponse needed by meltTokens().
+ *
  * @param invoice  BOLT11 Lightning invoice string.
  * @returns Quote object containing `quote` ID, `amount`, and `fee_reserve`.
  */
 export async function getMeltQuote(
-  invoice: string
-): Promise<{ quote: string; amount: number; fee_reserve: number }> {
-  const mintUrl = getMintUrl();
-  const response = await fetch(`${mintUrl}/v1/melt/quote/bolt11`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ unit: 'sat', request: invoice }),
-  });
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => '(no body)');
-    throw new Error(`getMeltQuote failed: HTTP ${response.status} — ${text}`);
-  }
-
-  const data = (await response.json()) as { quote: string; amount: number; fee_reserve: number };
-  return data;
+  invoice: string,
+  proofs?: Proof[]
+): Promise<{ quote: string; amount: number; fee_reserve: number; inputFee: number }> {
+  const { wallet } = await buildWallet();
+  const meltQuote = await wallet.createMeltQuote(invoice);
+  const feeProofs = proofs ?? getProofs();
+  const inputFee = wallet.getFeesForProofs(feeProofs);
+  return {
+    quote: meltQuote.quote,
+    amount: meltQuote.amount,
+    fee_reserve: meltQuote.fee_reserve,
+    inputFee,
+  };
 }
 
 /**
  * Melts Cashu proofs to pay a BOLT11 Lightning invoice (NUT-05).
  *
- * @param invoice   BOLT11 invoice to pay.
- * @param quoteId   Quote ID previously obtained from getMeltQuote.
+ * Uses wallet.meltProofs() which sends NUT-08 blank outputs so the mint
+ * can return change for any unused fee reserve.
+ *
+ * @param invoice   BOLT11 invoice to pay (used to re-create the melt quote).
+ * @param _quoteId  Unused — kept for API compatibility. The quote is re-fetched.
  * @param proofs    Proofs to use as inputs for the payment.
- * @returns `{ paid, payment_preimage }` on success.
- * @throws A user-friendly error string on failure.
+ * @returns `{ paid, payment_preimage, change }` on success.
  */
 export async function meltTokens(
   invoice: string,
-  quoteId: string,
+  _quoteId: string,
   proofs: Proof[]
-): Promise<{ paid: boolean; payment_preimage: string | null }> {
-  const mintUrl = getMintUrl();
-  const response = await fetch(`${mintUrl}/v1/melt/bolt11`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ quote: quoteId, inputs: proofs }),
-  });
+): Promise<{ paid: boolean; payment_preimage: string | null; change: Proof[] }> {
+  const { wallet } = await buildWallet();
+  const meltQuote = await wallet.createMeltQuote(invoice);
+  const result = await wallet.meltProofs(meltQuote, proofs);
 
-  if (!response.ok) {
-    // Map common HTTP status codes / error patterns to friendly messages
-    if (response.status === 402) {
-      throw new Error('Not enough tokens to cover the invoice amount and fees');
-    }
+  const paid = result.quote.state === 'PAID';
+  const preimage = (result.quote as Record<string, unknown>)['payment_preimage'] as string | null ?? null;
 
-    const text = await response.text().catch(() => '');
+  return { paid, payment_preimage: preimage, change: result.change };
+}
 
-    // Check invoice prefix mismatch (regtest expects lnbcrt)
-    if (
-      invoice.length > 0 &&
-      !invoice.toLowerCase().startsWith('lnbcrt') &&
-      import.meta.env.DEV
-    ) {
-      throw new Error('Invalid invoice — expected a regtest invoice (lnbcrt\u2026)');
-    }
+// ---------------------------------------------------------------------------
+// Withdraw estimation
+// ---------------------------------------------------------------------------
 
-    // Check for expiry keyword in error body
-    if (text.toLowerCase().includes('expir')) {
-      throw new Error('Invoice expired — please generate a new one');
-    }
-
-    // Generic fallback
-    let mintMessage = text;
-    try {
-      const parsed = JSON.parse(text) as { detail?: string; error?: string };
-      mintMessage = parsed.detail ?? parsed.error ?? text;
-    } catch {
-      // leave mintMessage as raw text
-    }
-    throw new Error(`Payment failed: ${mintMessage}`);
-  }
-
-  const data = (await response.json()) as { paid: boolean; payment_preimage: string | null };
-  return data;
+/**
+ * Estimates the maximum amount a user can withdraw via Lightning melt.
+ *
+ * Accounts for:
+ *   - NUT-02 input fee: ceil(n_proofs * input_fee_ppk / 1000)
+ *   - Lightning fee buffer: max(3, ceil(balance * 0.01)) — conservative estimate
+ *     since the actual fee_reserve is unknown until an invoice exists.
+ *
+ * @returns maxAmount (safe invoice amount), inputFee, lightningBuffer, and balance.
+ */
+export async function estimateMaxWithdrawable(): Promise<{
+  maxAmount: number;
+  inputFee: number;
+  lightningBuffer: number;
+  balance: number;
+}> {
+  const { wallet } = await buildWallet();
+  const proofs = getProofs();
+  const balance = proofs.reduce((s, p) => s + p.amount, 0);
+  const inputFee = wallet.getFeesForProofs(proofs);
+  const lightningBuffer = Math.max(2, Math.ceil(balance * 0.01));
+  const maxAmount = Math.max(0, balance - inputFee - lightningBuffer);
+  return { maxAmount, inputFee, lightningBuffer, balance };
 }
 
 /**
