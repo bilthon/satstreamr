@@ -563,13 +563,17 @@ function resetWithdrawPanel(): void {
   withdrawState.quoteFeeReserve = 0;
 }
 
+let withdrawEstimateGen = 0;
+
 function openWithdrawPanel(): void {
   resetWithdrawPanel();
   if (withdrawPanelEl !== null) withdrawPanelEl.style.display = 'block';
   withdrawInvoiceInputEl?.focus();
 
   // Compute and display the max withdrawable estimate
+  const gen = ++withdrawEstimateGen;
   void estimateMaxWithdrawable().then(({ maxAmount, inputFee, lightningBuffer, balance }) => {
+    if (gen !== withdrawEstimateGen) return; // stale — panel was closed/reopened
     if (withdrawMaxEstimateEl === null) return;
 
     if (balance === 0) {
@@ -609,6 +613,7 @@ function openWithdrawPanel(): void {
       });
     }
   }).catch((err: unknown) => {
+    if (gen !== withdrawEstimateGen) return;
     console.warn('[withdraw] could not estimate max withdrawable:', err);
     if (withdrawMaxEstimateEl !== null) {
       withdrawMaxEstimateEl.style.display = 'none';
