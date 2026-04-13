@@ -231,7 +231,7 @@ export async function estimateMaxWithdrawable(): Promise<{
   const proofs = getProofs();
   const balance = proofs.reduce((s, p) => s + p.amount, 0);
   const inputFee = wallet.getFeesForProofs(proofs);
-  const lightningBuffer = Math.max(3, Math.ceil(balance * 0.01));
+  const lightningBuffer = Math.max(1, Math.ceil(balance * 0.01));
   const maxAmount = Math.max(0, balance - inputFee - lightningBuffer);
   return { maxAmount, inputFee, lightningBuffer, balance };
 }

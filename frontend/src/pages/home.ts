@@ -552,7 +552,7 @@ function openWithdrawPanel(): void {
     if (maxAmount <= 0) {
       withdrawMaxEstimateEl.style.display = 'block';
       withdrawMaxEstimateEl.innerHTML =
-        '<div class="max-main">Balance too small to withdraw after fees.</div>';
+        `<div class="max-main">Balance: ${balance} <span class="sat">S</span> — fees may exceed this, but try with a small invoice.</div>`;
       return;
     }
 
