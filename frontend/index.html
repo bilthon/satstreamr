@@ -608,7 +608,7 @@
         word-break: break-all;
         white-space: pre-wrap;
         margin: 0;
-        max-height: 5.5rem;
+        max-height: 6.5rem;
         overflow-y: auto;
       }
 
@@ -671,6 +671,20 @@
         border: 1px solid rgba(239, 68, 68, 0.25);
       }
 
+      #deposit-reset-countdown {
+        display: none;
+        margin-top: calc(var(--space-2) * -1);
+        margin-bottom: var(--space-4);
+        text-align: center;
+        font-size: var(--text-xs);
+        color: var(--color-text-muted);
+        opacity: 0.8;
+      }
+
+      #deposit-reset-countdown.is-visible {
+        display: block;
+      }
+
       /* Spinner */
       .deposit-spinner {
         display: inline-block;
@@ -691,7 +705,8 @@
       /* Footer buttons */
       #deposit-footer {
         display: flex;
-        justify-content: flex-end;
+        justify-content: space-between;
+        align-items: center;
         gap: var(--space-2);
       }
 
@@ -971,10 +986,12 @@
 
         <!-- Status messages -->
         <div id="deposit-status" role="status" aria-live="polite"></div>
+        <div id="deposit-reset-countdown" aria-live="polite"></div>
 
         <!-- Footer -->
         <div id="deposit-footer">
-          <button class="btn-primary" id="deposit-close-btn" type="button" style="background:#6b7280">Close</button>
+          <button class="btn-withdraw btn-withdraw-ghost" id="deposit-reset-btn" type="button">Reset</button>
+          <button class="btn-withdraw btn-withdraw-ghost" id="deposit-close-btn" type="button">Close</button>
         </div>
       </div>
     </div>

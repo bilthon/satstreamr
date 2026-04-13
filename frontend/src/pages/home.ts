@@ -127,7 +127,9 @@ const depositQrCanvasEl = document.getElementById('deposit-qr-canvas') as HTMLCa
 const depositInvoiceTextEl = document.getElementById('deposit-invoice-text');
 const depositCopyBtnEl = document.getElementById('deposit-copy-btn') as HTMLButtonElement | null;
 const depositStatusEl = document.getElementById('deposit-status');
+const depositResetCountdownEl = document.getElementById('deposit-reset-countdown');
 const depositSuccessAreaEl = document.getElementById('deposit-success-area');
+const depositResetBtnEl = document.getElementById('deposit-reset-btn') as HTMLButtonElement | null;
 const depositCloseBtnEl = document.getElementById('deposit-close-btn') as HTMLButtonElement | null;
 
 /** Currently displayed invoice string (used by the copy button). */
@@ -148,6 +150,18 @@ function hideDepositStatus(): void {
   if (depositStatusEl === null) return;
   depositStatusEl.className = '';
   depositStatusEl.textContent = '';
+}
+
+function showDepositResetCountdown(seconds: number): void {
+  if (depositResetCountdownEl === null) return;
+  depositResetCountdownEl.className = 'is-visible';
+  depositResetCountdownEl.textContent = `Resetting in ${seconds}`;
+}
+
+function hideDepositResetCountdown(): void {
+  if (depositResetCountdownEl === null) return;
+  depositResetCountdownEl.className = '';
+  depositResetCountdownEl.textContent = '';
 }
 
 function showDepositInvoice(invoice: string): void {
@@ -184,9 +198,10 @@ function hideDepositInvoice(): void {
 // Deposit success celebration
 // ---------------------------------------------------------------------------
 
-const CELEBRATION_DISPLAY_MS = 4000;
+const CELEBRATION_DISPLAY_MS = 8_000;
 
 let celebrationTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let celebrationCountdownIntervalId: ReturnType<typeof setInterval> | null = null;
 let confettiCleanupFn: (() => void) | null = null;
 
 function showDepositCelebration(amount: number): void {
@@ -204,6 +219,7 @@ function showDepositCelebration(amount: number): void {
     `Deposited ${amount} <span class="sat">S</span>!`,
     'success',
   );
+  showDepositResetCountdown(Math.ceil(CELEBRATION_DISPLAY_MS / 1000));
 
   if (depositAmountInputEl !== null) {
     depositAmountInputEl.value = '';
@@ -213,8 +229,15 @@ function showDepositCelebration(amount: number): void {
     confettiCleanupFn = launchDepositConfetti();
   }
 
+  let secondsLeft = Math.ceil(CELEBRATION_DISPLAY_MS / 1000);
+  celebrationCountdownIntervalId = setInterval(() => {
+    secondsLeft -= 1;
+    if (secondsLeft <= 0) return;
+    showDepositResetCountdown(secondsLeft);
+  }, 1000);
+
   celebrationTimeoutId = setTimeout(() => {
-    cancelCelebration();
+    resetDepositPanel();
   }, CELEBRATION_DISPLAY_MS);
 }
 
@@ -222,6 +245,10 @@ function cancelCelebration(): void {
   if (celebrationTimeoutId !== null) {
     clearTimeout(celebrationTimeoutId);
     celebrationTimeoutId = null;
+  }
+  if (celebrationCountdownIntervalId !== null) {
+    clearInterval(celebrationCountdownIntervalId);
+    celebrationCountdownIntervalId = null;
   }
   if (confettiCleanupFn !== null) {
     confettiCleanupFn();
@@ -337,6 +364,7 @@ function resetDepositPanel(): void {
   hideDepositInvoice();
   cancelCelebration();
   hideDepositStatus();
+  hideDepositResetCountdown();
 }
 
 function openDepositModal(): void {
@@ -354,6 +382,14 @@ function closeDepositModal(): void {
 if (depositBtnEl !== null) {
   depositBtnEl.addEventListener('click', () => {
     openDepositModal();
+  });
+}
+
+// Close button dismisses the modal and resets state.
+if (depositResetBtnEl !== null) {
+  depositResetBtnEl.addEventListener('click', () => {
+    resetDepositPanel();
+    depositAmountInputEl?.focus();
   });
 }
 
