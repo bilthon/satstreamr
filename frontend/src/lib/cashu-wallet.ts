@@ -243,6 +243,35 @@ export async function meltTokens(
   return data;
 }
 
+// ---------------------------------------------------------------------------
+// Withdraw estimation
+// ---------------------------------------------------------------------------
+
+/**
+ * Estimates the maximum amount a user can withdraw via Lightning melt.
+ *
+ * Accounts for:
+ *   - NUT-02 input fee: ceil(n_proofs * input_fee_ppk / 1000)
+ *   - Lightning fee buffer: max(3, ceil(balance * 0.01)) — conservative estimate
+ *     since the actual fee_reserve is unknown until an invoice exists.
+ *
+ * @returns maxAmount (safe invoice amount), inputFee, lightningBuffer, and balance.
+ */
+export async function estimateMaxWithdrawable(): Promise<{
+  maxAmount: number;
+  inputFee: number;
+  lightningBuffer: number;
+  balance: number;
+}> {
+  const { wallet } = await buildWallet();
+  const proofs = getProofs();
+  const balance = proofs.reduce((s, p) => s + p.amount, 0);
+  const inputFee = wallet.getFeesForProofs(proofs);
+  const lightningBuffer = Math.max(3, Math.ceil(balance * 0.01));
+  const maxAmount = Math.max(0, balance - inputFee - lightningBuffer);
+  return { maxAmount, inputFee, lightningBuffer, balance };
+}
+
 /**
  * Checks the spend state of a set of Cashu proofs (NUT-07).
  *
