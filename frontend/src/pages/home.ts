@@ -565,6 +565,49 @@ function resetWithdrawPanel(): void {
 
 let withdrawEstimateGen = 0;
 
+/** Update the max-estimate display using the actual fee_reserve from a melt quote. */
+function refreshEstimateWithQuote(feeReserve: number): void {
+  void estimateMaxWithdrawable().then(({ inputFee, balance }) => {
+    if (withdrawMaxEstimateEl === null) return;
+    const maxAmount = Math.max(0, balance - inputFee - feeReserve);
+
+    if (maxAmount <= 0) {
+      withdrawMaxEstimateEl.style.display = 'block';
+      withdrawMaxEstimateEl.innerHTML =
+        '<div class="max-main">Balance too small to withdraw after fees.</div>';
+      return;
+    }
+
+    withdrawMaxEstimateEl.style.display = 'block';
+    // Safe: all interpolated values are numbers from local wallet state.
+    withdrawMaxEstimateEl.innerHTML = `
+      <div class="max-main">
+        <span class="max-amount">Maximum withdrawable amount: ${maxAmount} <span class="sat">S</span></span>
+        <button class="copy-amount-btn" type="button">Copy</button>
+      </div>
+      <div class="max-breakdown">
+        ${balance} <span class="sat">S</span> balance
+        \u2212 ${inputFee} <span class="sat">S</span> proof fee
+        \u2212 ${feeReserve} <span class="sat">S</span> lightning fee
+      </div>
+    `;
+
+    const copyBtn = withdrawMaxEstimateEl.querySelector('.copy-amount-btn');
+    if (copyBtn !== null) {
+      copyBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(String(maxAmount)).then(() => {
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1800);
+        }).catch((err: unknown) => {
+          console.error('[withdraw] clipboard write failed', err);
+        });
+      });
+    }
+  }).catch(() => {
+    // Keep the existing heuristic estimate visible
+  });
+}
+
 function openWithdrawPanel(): void {
   resetWithdrawPanel();
   if (withdrawPanelEl !== null) withdrawPanelEl.style.display = 'block';
@@ -684,6 +727,7 @@ if (withdrawGetQuoteBtnEl !== null) {
       const balance = getBalance();
 
       showWithdrawQuote(quote.amount, quote.fee_reserve);
+      refreshEstimateWithQuote(quote.fee_reserve);
 
       if (balance < total) {
         // Use actual fee_reserve from quote + input fee for a precise suggestion
