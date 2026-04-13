@@ -522,6 +522,7 @@
       }
 
       #deposit-panel {
+        position: relative;
         background: var(--color-bg-elevated);
         border: 1px solid var(--color-border-default);
         border-radius: var(--radius-xl);
@@ -766,6 +767,70 @@
         flex-shrink: 0;
       }
 
+      /* ---- Deposit success celebration ---- */
+      #deposit-success-area {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: var(--space-8) 0;
+        margin-bottom: 1.25rem;
+      }
+
+      #deposit-success-area.is-visible {
+        display: flex;
+      }
+
+      #deposit-checkmark {
+        opacity: 0;
+        transform: scale(0.3);
+      }
+
+      #deposit-success-area.is-visible #deposit-checkmark {
+        animation: deposit-check-pop var(--duration-slow) var(--ease-spring) forwards;
+      }
+
+      .checkmark-circle {
+        stroke-dasharray: 227;
+        stroke-dashoffset: 227;
+      }
+
+      #deposit-success-area.is-visible .checkmark-circle {
+        animation: deposit-circle-draw 600ms var(--ease-out) forwards;
+      }
+
+      .checkmark-tick {
+        stroke-dasharray: 60;
+        stroke-dashoffset: 60;
+      }
+
+      #deposit-success-area.is-visible .checkmark-tick {
+        animation: deposit-tick-draw 400ms var(--ease-out) 350ms forwards;
+      }
+
+      @keyframes deposit-check-pop {
+        0%   { opacity: 0; transform: scale(0.3); }
+        60%  { opacity: 1; transform: scale(1.08); }
+        100% { opacity: 1; transform: scale(1); }
+      }
+
+      @keyframes deposit-circle-draw {
+        to { stroke-dashoffset: 0; }
+      }
+
+      @keyframes deposit-tick-draw {
+        to { stroke-dashoffset: 0; }
+      }
+
+      .deposit-confetti-canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 1;
+      }
+
       /* ---- Reduced motion ---- */
       @media (prefers-reduced-motion: reduce) {
         *,
@@ -886,6 +951,14 @@
           <canvas id="deposit-qr-canvas" aria-label="Lightning invoice QR code"></canvas>
           <pre id="deposit-invoice-text"></pre>
           <button id="deposit-copy-btn" type="button">Copy Invoice</button>
+        </div>
+
+        <!-- Success celebration (replaces invoice area on confirmed deposit) -->
+        <div id="deposit-success-area" aria-live="polite">
+          <svg id="deposit-checkmark" viewBox="0 0 80 80" width="100" height="100" aria-label="Payment confirmed">
+            <circle class="checkmark-circle" cx="40" cy="40" r="36" fill="none" stroke="var(--color-success)" stroke-width="3"/>
+            <path class="checkmark-tick" d="M24 42 L35 53 L56 28" fill="none" stroke="var(--color-success)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
         </div>
 
         <!-- Status messages -->

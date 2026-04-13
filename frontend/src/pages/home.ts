@@ -127,6 +127,7 @@ const depositQrCanvasEl = document.getElementById('deposit-qr-canvas') as HTMLCa
 const depositInvoiceTextEl = document.getElementById('deposit-invoice-text');
 const depositCopyBtnEl = document.getElementById('deposit-copy-btn') as HTMLButtonElement | null;
 const depositStatusEl = document.getElementById('deposit-status');
+const depositSuccessAreaEl = document.getElementById('deposit-success-area');
 const depositCloseBtnEl = document.getElementById('deposit-close-btn') as HTMLButtonElement | null;
 
 /** Currently displayed invoice string (used by the copy button). */
@@ -150,6 +151,7 @@ function hideDepositStatus(): void {
 }
 
 function showDepositInvoice(invoice: string): void {
+  hideDepositCelebration();
   depositCurrentInvoice = invoice;
 
   if (depositInvoiceTextEl !== null) {
@@ -178,10 +180,145 @@ function hideDepositInvoice(): void {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Deposit success celebration
+// ---------------------------------------------------------------------------
+
+const CELEBRATION_DISPLAY_MS = 4000;
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function showDepositCelebration(amount: number): void {
+  hideDepositInvoice();
+
+  if (depositSuccessAreaEl !== null) {
+    depositSuccessAreaEl.classList.add('is-visible');
+  }
+
+  showDepositStatus(
+    `Deposited ${amount} <span class="sat">S</span>!`,
+    'success',
+  );
+
+  if (depositAmountInputEl !== null) {
+    depositAmountInputEl.value = '';
+  }
+
+  let confettiCleanup: (() => void) | null = null;
+  if (!prefersReducedMotion) {
+    confettiCleanup = launchDepositConfetti();
+  }
+
+  setTimeout(() => {
+    hideDepositCelebration();
+    if (confettiCleanup !== null) confettiCleanup();
+  }, CELEBRATION_DISPLAY_MS);
+}
+
+function hideDepositCelebration(): void {
+  if (depositSuccessAreaEl !== null) {
+    depositSuccessAreaEl.classList.remove('is-visible');
+  }
+}
+
+function launchDepositConfetti(): () => void {
+  const panel = document.getElementById('deposit-panel');
+  if (panel === null) return () => {};
+
+  const canvas = document.createElement('canvas');
+  canvas.className = 'deposit-confetti-canvas';
+  canvas.width = panel.offsetWidth;
+  canvas.height = panel.offsetHeight;
+  panel.appendChild(canvas);
+
+  const ctx = canvas.getContext('2d');
+  if (ctx === null) {
+    canvas.remove();
+    return () => {};
+  }
+
+  const PARTICLE_COUNT = 40;
+  const COLORS = ['#10d9a0', '#f7931a', '#f0c419', '#7c3aed', '#38bdf8', '#eef2ff'];
+  const GRAVITY = 0.12;
+  const DRAG = 0.98;
+  const DURATION_MS = 2500;
+
+  interface Particle {
+    x: number; y: number;
+    vx: number; vy: number;
+    w: number; h: number;
+    color: string;
+    rotation: number; rotationSpeed: number;
+  }
+
+  const cx = canvas.width / 2;
+  const cy = canvas.height * 0.35;
+
+  // Safe: COLORS indexing uses Math.floor on Math.random — always in bounds.
+  const particles: Particle[] = Array.from({ length: PARTICLE_COUNT }, () => ({
+    x: cx + (Math.random() - 0.5) * 60,
+    y: cy,
+    vx: (Math.random() - 0.5) * 8,
+    vy: -(Math.random() * 6 + 2),
+    w: Math.random() * 6 + 3,
+    h: Math.random() * 4 + 2,
+    color: COLORS[Math.floor(Math.random() * COLORS.length)] ?? '#10d9a0',
+    rotation: Math.random() * Math.PI * 2,
+    rotationSpeed: (Math.random() - 0.5) * 0.3,
+  }));
+
+  let animId = 0;
+  let cancelled = false;
+  const startTime = performance.now();
+
+  function frame(now: number): void {
+    if (cancelled) return;
+    const elapsed = now - startTime;
+
+    ctx!.clearRect(0, 0, canvas.width, canvas.height);
+
+    const fadeStart = DURATION_MS - 800;
+    const globalAlpha = elapsed > fadeStart
+      ? Math.max(0, 1 - (elapsed - fadeStart) / 800)
+      : 1;
+
+    for (const p of particles) {
+      p.vy += GRAVITY;
+      p.vx *= DRAG;
+      p.vy *= DRAG;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.rotation += p.rotationSpeed;
+
+      ctx!.save();
+      ctx!.translate(p.x, p.y);
+      ctx!.rotate(p.rotation);
+      ctx!.globalAlpha = globalAlpha;
+      ctx!.fillStyle = p.color;
+      ctx!.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx!.restore();
+    }
+
+    if (elapsed < DURATION_MS) {
+      animId = requestAnimationFrame(frame);
+    } else {
+      canvas.remove();
+    }
+  }
+
+  animId = requestAnimationFrame(frame);
+
+  return () => {
+    cancelled = true;
+    cancelAnimationFrame(animId);
+    canvas.remove();
+  };
+}
+
 function resetDepositPanel(): void {
   if (depositAmountInputEl !== null) depositAmountInputEl.value = '';
   if (depositGenerateBtnEl !== null) depositGenerateBtnEl.disabled = false;
   hideDepositInvoice();
+  hideDepositCelebration();
   hideDepositStatus();
 }
 
@@ -298,8 +435,8 @@ if (depositGenerateBtnEl !== null) {
         return;
       }
 
-      // Balance is updated reactively via onBalanceChange — just show success.
-      showDepositStatus(`Deposited ${amount} <span class="sat">S</span>!`, 'success');
+      // Balance is updated reactively via onBalanceChange — celebrate!
+      showDepositCelebration(amount);
       depositGenerateBtnEl.disabled = false;
     })();
   });
