@@ -151,7 +151,7 @@ function hideDepositStatus(): void {
 }
 
 function showDepositInvoice(invoice: string): void {
-  hideDepositCelebration();
+  cancelCelebration();
   depositCurrentInvoice = invoice;
 
   if (depositInvoiceTextEl !== null) {
@@ -185,12 +185,18 @@ function hideDepositInvoice(): void {
 // ---------------------------------------------------------------------------
 
 const CELEBRATION_DISPLAY_MS = 4000;
-const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+let celebrationTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let confettiCleanupFn: (() => void) | null = null;
 
 function showDepositCelebration(amount: number): void {
+  // Cancel any in-flight celebration first
+  cancelCelebration();
   hideDepositInvoice();
 
   if (depositSuccessAreaEl !== null) {
+    // Force reflow to reset SVG animations when re-triggering
+    void depositSuccessAreaEl.offsetHeight;
     depositSuccessAreaEl.classList.add('is-visible');
   }
 
@@ -203,15 +209,25 @@ function showDepositCelebration(amount: number): void {
     depositAmountInputEl.value = '';
   }
 
-  let confettiCleanup: (() => void) | null = null;
-  if (!prefersReducedMotion) {
-    confettiCleanup = launchDepositConfetti();
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    confettiCleanupFn = launchDepositConfetti();
   }
 
-  setTimeout(() => {
-    hideDepositCelebration();
-    if (confettiCleanup !== null) confettiCleanup();
+  celebrationTimeoutId = setTimeout(() => {
+    cancelCelebration();
   }, CELEBRATION_DISPLAY_MS);
+}
+
+function cancelCelebration(): void {
+  if (celebrationTimeoutId !== null) {
+    clearTimeout(celebrationTimeoutId);
+    celebrationTimeoutId = null;
+  }
+  if (confettiCleanupFn !== null) {
+    confettiCleanupFn();
+    confettiCleanupFn = null;
+  }
+  hideDepositCelebration();
 }
 
 function hideDepositCelebration(): void {
@@ -318,7 +334,7 @@ function resetDepositPanel(): void {
   if (depositAmountInputEl !== null) depositAmountInputEl.value = '';
   if (depositGenerateBtnEl !== null) depositGenerateBtnEl.disabled = false;
   hideDepositInvoice();
-  hideDepositCelebration();
+  cancelCelebration();
   hideDepositStatus();
 }
 
