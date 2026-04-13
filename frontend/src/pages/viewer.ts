@@ -48,6 +48,8 @@ const exitSessionBtnEl = document.getElementById('exit-session-btn') as HTMLButt
 
 // Budget low warning
 const budgetLowBannerEl = document.getElementById('budget-low-banner');
+const budgetLowTextEl = document.getElementById('budget-low-text');
+const countdownDisplayEl = document.getElementById('countdown-display');
 
 function showMintMismatch(sessionMint: string, localMint: string): void {
   if (sessionMintUrlEl !== null) sessionMintUrlEl.textContent = sessionMint;
@@ -64,6 +66,103 @@ function showMintMismatch(sessionMint: string, localMint: string): void {
 let totalSatsPaidDisplay = 0;
 let totalChunksPaidDisplay = 0;
 
+// ---------------------------------------------------------------------------
+// Low-funds warning & countdown
+// ---------------------------------------------------------------------------
+
+/** Seconds of remaining session time at which the warning phase begins. */
+const LOW_FUNDS_WARNING_SECS = 60;
+/** Seconds at which the animated countdown begins. */
+const FINAL_COUNTDOWN_SECS = 10;
+
+type LowFundsPhase = 'normal' | 'warning' | 'countdown';
+let lowFundsPhase: LowFundsPhase = 'normal';
+let countdownTimerId: ReturnType<typeof setInterval> | null = null;
+
+/** Estimate remaining seconds based on current balance and active rate. */
+function getRemainingSeconds(balanceSats: number): number {
+  if (activeRateSatsPerInterval <= 0 || activeIntervalSeconds <= 0) return Infinity;
+  const chunks = Math.floor(balanceSats / activeRateSatsPerInterval);
+  return chunks * activeIntervalSeconds;
+}
+
+/** Transition into a low-funds phase, updating DOM classes and content. */
+function enterPhase(phase: LowFundsPhase, remainingSecs?: number): void {
+  if (phase === lowFundsPhase && phase !== 'countdown') return;
+  lowFundsPhase = phase;
+
+  if (budgetLowBannerEl === null) return;
+
+  // Reset classes
+  budgetLowBannerEl.classList.remove('warning-phase', 'countdown-phase');
+  budgetDisplayEl?.classList.remove('warning', 'countdown');
+
+  if (countdownDisplayEl !== null) countdownDisplayEl.textContent = '';
+
+  switch (phase) {
+    case 'normal':
+      // Hide the banner entirely
+      stopCountdownTimer();
+      break;
+
+    case 'warning':
+      budgetLowBannerEl.classList.add('warning-phase');
+      budgetDisplayEl?.classList.add('warning');
+      if (budgetLowTextEl !== null) budgetLowTextEl.textContent = 'Low balance \u2014 session will end soon';
+      stopCountdownTimer();
+      break;
+
+    case 'countdown':
+      budgetLowBannerEl.classList.add('countdown-phase');
+      budgetDisplayEl?.classList.add('countdown');
+      if (budgetLowTextEl !== null) budgetLowTextEl.textContent = 'Ending in';
+      startCountdownTimer(remainingSecs ?? FINAL_COUNTDOWN_SECS);
+      break;
+  }
+}
+
+/** Evaluate the current balance and enter the correct phase. */
+function updateLowFundsState(balanceSats: number): void {
+  const remaining = getRemainingSeconds(balanceSats);
+
+  if (remaining <= FINAL_COUNTDOWN_SECS) {
+    enterPhase('countdown', remaining);
+  } else if (remaining <= LOW_FUNDS_WARNING_SECS) {
+    enterPhase('warning');
+  } else {
+    enterPhase('normal');
+  }
+}
+
+function startCountdownTimer(startSecs: number): void {
+  stopCountdownTimer();
+  let secs = startSecs;
+  renderCountdownDigit(secs);
+
+  countdownTimerId = setInterval(() => {
+    secs -= 1;
+    if (secs <= 0) {
+      stopCountdownTimer();
+      renderCountdownDigit(0);
+      return;
+    }
+    renderCountdownDigit(secs);
+  }, 1000);
+}
+
+function stopCountdownTimer(): void {
+  if (countdownTimerId !== null) {
+    clearInterval(countdownTimerId);
+    countdownTimerId = null;
+  }
+}
+
+function renderCountdownDigit(secs: number): void {
+  if (countdownDisplayEl === null) return;
+  const text = String(secs);
+  countdownDisplayEl.innerHTML = `<span class="count-digit">${text}</span>s`;
+}
+
 const sessionSummary = createSessionSummary({
   statsElId: 'viewer-stats',
   get sessionId() { return sessionId ?? undefined; },
@@ -76,24 +175,12 @@ function showSessionStats(initialBudget: number): void {
   updateBudgetDisplay(initialBudget);
 }
 
-/** Update the remaining budget display and low-budget warning. */
+/** Update the remaining budget display and low-funds warning state. */
 function updateBudgetDisplay(budgetSats: number): void {
   if (budgetDisplayEl !== null) {
     budgetDisplayEl.innerHTML = `${budgetSats} <span class="sat">S</span>`;
-    if (budgetSats <= 10) {
-      budgetDisplayEl.classList.add('low');
-    } else {
-      budgetDisplayEl.classList.remove('low');
-    }
   }
-  // Show/hide the low-budget warning banner
-  if (budgetLowBannerEl !== null) {
-    if (budgetSats > 0 && budgetSats <= 10) {
-      budgetLowBannerEl.classList.add('visible');
-    } else {
-      budgetLowBannerEl.classList.remove('visible');
-    }
-  }
+  updateLowFundsState(budgetSats);
   updateEstDurationDisplay(budgetSats);
 }
 
@@ -129,6 +216,8 @@ function showSessionSummary(): void {
 /** Shared cleanup for session end (local exit or remote session_ended). */
 function endSession(): void {
   scheduler?.stop();
+  stopCountdownTimer();
+  enterPhase('normal');
   peer.close();
   if (localStream !== null) {
     localStream.getTracks().forEach(t => t.stop());
@@ -326,6 +415,7 @@ function setupPeerHandlers(): void {
 
       scheduler.onBudgetExhausted(() => {
         ui.showError('Budget exhausted \u2014 session ended');
+        stopCountdownTimer();
         scheduler?.stop();
         peer.close();
         if (localStream !== null) {
@@ -460,6 +550,8 @@ async function handleOffer(offer: RTCSessionDescriptionInit): Promise<void> {
   peer = recreatePeer(peer);
   setupPeerHandlers();
 
+  stopCountdownTimer();
+  lowFundsPhase = 'normal';
   scheduler?.stop();
   scheduler = null;
   dataChannel = null;
