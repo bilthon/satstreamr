@@ -11,6 +11,7 @@ export default defineConfig({
     basicSsl(),
   ],
   build: {
+    target: 'esnext',
     rollupOptions: {
       input: {
         index: resolve(__dirname, 'index.html'),
