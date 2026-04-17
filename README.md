@@ -1,6 +1,8 @@
 # satstreamr
 
-Satstreamr is a peer-to-peer metered live video tutoring platform. A viewer connects directly to a tutor's browser over WebRTC and pays in Cashu e-cash micropayments sent over a WebRTC data channel — no payment processor required. This is a regtest-only developer preview; mainnet support is not implemented.
+Satstreamr is a peer-to-peer metered live video tutoring platform. A viewer connects directly to a tutor's browser over WebRTC and pays in Cashu e-cash micropayments sent over a WebRTC data channel — no payment processor required.
+
+This README covers the local development setup (regtest Lightning + local mint). For production deployment behind nginx, see [INSTALL.md](INSTALL.md).
 
 ---
 
@@ -18,10 +20,10 @@ Satstreamr is a peer-to-peer metered live video tutoring platform. A viewer conn
               │                                              │
    ┌──────────▼──────────┐    WebRTC (video +     ┌─────────▼───────────┐
    │  Browser (Tutor)    │◄──── data channel) ───►│  Browser (Viewer)   │
-   │  :5173/tutor.html   │                         │  :5173/viewer.html  │
+   │  :5173/room.html    │                         │  :5173/room.html    │
    └─────────────────────┘                         └─────────────────────┘
               ▲                                              │
-              │  Cashu tokens (P2PK, over data channel)     │
+              │  Cashu tokens over WebRTC data channel       │
               └──────────────────────────────────────────────┘
 
    Supporting services:
@@ -147,29 +149,20 @@ TURN_SHARED_SECRET=<same secret from coturn.env> TURN_HOST=localhost npm run dev
 
 ### Step 5: Start the frontend
 
+No env file is required — Vite's dev proxy routes `/mint` to `localhost:3338` and `/ws` to `localhost:8080` automatically. Optionally copy `.env.example` to `.env` if you need to override any defaults.
+
 ```bash
 cd frontend
-cp .env.example .env
-```
-
-Edit `frontend/.env` and fill in `VITE_LND_CUSTOMER_MACAROON_HEX`. Extract the hex value from the running container:
-
-```bash
-docker exec lnd_customer xxd -p -c 256 \
-  /root/.lnd/data/chain/bitcoin/regtest/admin.macaroon
-```
-
-Then install dependencies and start the dev server:
-
-```bash
 npm install
 npm run dev
 ```
 
-Open two browser tabs:
+Open the app at [http://localhost:5173/](http://localhost:5173/). From the home page:
 
-- Tutor: [http://localhost:5173/tutor.html](http://localhost:5173/tutor.html)
-- Viewer: [http://localhost:5173/viewer.html](http://localhost:5173/viewer.html)
+- Click **Start streaming** to become a tutor — you'll land on `/room.html` and can create a session
+- Click **Join a stream** (or paste a session ID/invite URL) to become a viewer
+
+Both roles are served by the same `/room.html` — the presence of a `?session=…` query param determines the role.
 
 ---
 
@@ -191,12 +184,13 @@ Open two browser tabs:
 
 ### `frontend/.env`
 
+All variables are optional. If unset, the frontend uses Vite's dev proxy to reach the mint and signaling server on the same origin.
+
 | Variable | Required | Description | Example |
 |---|---|---|---|
-| `VITE_SIGNALING_URL` | Yes | WebSocket URL of the signaling server | `ws://localhost:8080` |
-| `VITE_MINT_URL` | Yes | HTTP URL of the Nutshell mint | `http://localhost:3338` |
-| `VITE_LND_CUSTOMER_REST_URL` | Yes | LND REST API for the customer node | `https://localhost:8082` |
-| `VITE_LND_CUSTOMER_MACAROON_HEX` | Yes | Hex-encoded admin macaroon for `lnd_customer` | `0201...` |
+| `VITE_SIGNALING_URL` | No | Override the signaling WebSocket URL | `wss://stream.example.com/ws` |
+| `VITE_MINT_URL` | No | Override the Cashu mint URL | `https://mint.example.com` |
+| `VITE_LND_CUSTOMER_MACAROON_HEX` | No (test-only) | Hex-encoded admin macaroon for `lnd_customer`, used by integration tests | `0201...` |
 
 ---
 
@@ -225,16 +219,16 @@ Uses Vitest. Covers the Cashu wallet module and data channel helpers.
 
 ## Gate Verification Checklist
 
-The MVP has four go/no-go gates. To manually verify each one:
+To manually smoke-test an end-to-end session:
 
-**Gate 1 — NUT-11 P2PK round-trip**
-With the mint running, open `tutor.html` and use the browser console to mint a token locked to a public key, then redeem it with the corresponding private key. Expect no errors and a confirmed proof.
+**Gate 1 — Wallet round-trip**
+On the home page, click **Deposit**, generate an invoice for a few hundred sats, and pay it from a Lightning wallet (in regtest, use `lnd_customer`). The balance should update with no errors. Then click **Withdraw** and pay a fresh invoice back out — balance returns to zero minus fees.
 
 **Gate 2 — WebRTC peer connection**
-Start all services. Open `tutor.html` and `viewer.html` in two tabs. Start a session on the tutor tab. The viewer tab should show "Connected" and display the tutor's video stream. Check the browser console for `iceConnectionState: "connected"`.
+Start all services. Open `/room.html` in one tab (tutor) and paste the session ID/invite URL into a second tab (viewer). The viewer tab should show "Connected" and display the tutor's video stream. Check the browser console for `iceConnectionState: "connected"`.
 
 **Gate 3 — Cashu token over data channel**
-With a live Gate 2 session, watch the browser console. Within ~10 seconds the viewer should log "token received" and the tutor should log "token redeemed". Balances in the UI update accordingly.
+With a live Gate 2 session, watch the browser console. Within ~10 seconds the viewer should log "token sent" and the tutor should log "token claimed". Balances in both wallets update accordingly.
 
 **Gate 4 — Payment scheduler runs for 60 seconds**
 Keep the Gate 3 session running for at least 60 seconds without closing either tab. Confirm payment chunks continue to be logged at approximately 10-second intervals with no missed chunks or double-spend errors.
@@ -247,9 +241,10 @@ Keep the Gate 3 session running for at least 60 seconds without closing either t
 satstreamr/                      # This repository
   frontend/                      # Vite + TypeScript browser app
     src/                         #   Source modules (wallet, datachannel, signaling)
-    tutor.html                   #   Tutor entry point
-    viewer.html                  #   Viewer entry point
+    index.html                   #   Home page (wallet, deposit/withdraw, session entry)
+    room.html                    #   Unified tutor/viewer page (role determined by ?session=)
     .env.example                 #   Frontend environment variable template
+  INSTALL.md                     # Production deployment guide (nginx + systemd)
   infra/                         # Docker Compose, mint, and TURN config
     docker-compose.yml           #   bitcoind + lnd_mint + lnd_customer
     bootstrap-regtest.sh         #   Idempotent regtest network setup script
@@ -271,12 +266,12 @@ satstreamr-signaling/            # Separate repository
 
 ## Payment Flow
 
-1. **Mint:** The viewer's browser mints a batch of Cashu tokens against the Nutshell mint, paying the mint invoice via the `lnd_customer` Lightning node.
-2. **Lock:** Each token is locked to the tutor's public key using NUT-11 P2PK so only the tutor can redeem it.
-3. **Send:** The payment scheduler sends one locked token per interval (~10 s) over the WebRTC data channel.
-4. **Redeem:** The tutor's browser redeems the received token against the mint, converting it to a fresh unspent proof stored in browser memory.
+1. **Deposit:** The viewer funds their wallet by minting Cashu tokens against the Nutshell mint, paying a Lightning invoice from any wallet.
+2. **Pre-split:** At session start, the viewer performs a NUT-03 swap to split the wallet balance into exact-denomination chunks (one per payment interval). This avoids per-tick mint calls during streaming.
+3. **Send:** The payment scheduler sends one plain unlocked token per interval (~10 s) over the WebRTC data channel.
+4. **Claim:** The tutor's browser claims each received token via a NUT-03 swap against the mint, converting it to fresh unspent proofs stored in the tutor's wallet.
 5. **Acknowledge:** The tutor sends a data-channel acknowledgement back to the viewer. If no ACK arrives within the timeout, the viewer pauses the stream.
-6. **Cash-out:** The tutor can sweep accumulated proofs to a Lightning invoice at any time using the cash-out UI.
+6. **Cash-out / Withdraw:** Either party can sweep their wallet to a Lightning invoice at any time using the withdraw UI (NUT-05 melt).
 
 ---
 
@@ -292,7 +287,7 @@ Coturn is not running or `TURN_SHARED_SECRET` in the signaling server does not m
 A firewall is blocking direct WebRTC traffic and the TURN relay is also unreachable. Ensure UDP port 3478 is accessible from both browser tabs. On a single machine this is loopback — verify coturn is actually running.
 
 **Double-spend error on first payment after a page reload**
-Stale proof state in `sessionStorage` from a previous session. Open DevTools > Application > Session Storage, clear the `satstreamr-*` keys, then reload.
+Stale proof state in `localStorage` from an interrupted previous session. Open DevTools > Application > Local Storage, clear the `satstreamr-*` keys, then reload. Note that this also wipes your wallet balance.
 
 **WebSocket disconnects and does not reconnect on mobile**
 Chrome and Safari on mobile aggressively suspend background tabs. The signaling client uses exponential backoff reconnection, but a fully frozen tab cannot execute JavaScript. Keep the browser tab in the foreground during a session.
@@ -302,16 +297,15 @@ The Python virtual environment has not been created. See Step 2 for the `python3
 
 ---
 
-## Known Limitations (MVP)
+## Known Limitations
 
-- **Regtest only.** No mainnet or testnet support; the Lightning stack is a local Docker network.
 - **Single viewer per session.** The signaling protocol supports exactly one tutor and one viewer per room.
-- **No authentication.** Any client can join any room by knowing the room ID.
-- **Coturn has no TLS.** The TURN server runs with `--no-tls --no-dtls`. Do not expose it to the public internet.
-- **LND invoice 600-second TTL.** LND invoices expire after 600 seconds by default. If the viewer does not pay the mint invoice within 10 minutes the mint request will fail.
-- **Single hardcoded mint.** Both tutor and viewer must use the same mint URL. The frontend enforces this and shows a blocking overlay on mismatch.
-- **No session recording.** Screen/video recording is a post-MVP feature.
-- **iOS Safari not supported.** WebRTC data channel behaviour on iOS Safari is incompatible with the current token delivery implementation.
+- **No authentication.** Any client can join any room by knowing the session ID.
+- **Single mint per session.** Both tutor and viewer must use the same mint URL. The frontend enforces this and shows a blocking overlay on mismatch.
+- **No session recording.** Screen/video recording is not yet implemented.
+- **iOS Safari limitations.** WebRTC data channel behaviour on iOS Safari may be unreliable; desktop Chrome/Firefox/Safari and Android Chrome are the tested configurations.
+- **Dev environment uses regtest.** The `infra/` stack spins up a local Docker regtest Lightning network. Production deployments (see [INSTALL.md](INSTALL.md)) use a real mainnet mint.
+- **Local coturn has no TLS.** The `infra/start-coturn.sh` dev config runs with `--no-tls --no-dtls`. For production, configure TLS on coturn before exposing to the public internet.
 
 ---
 
