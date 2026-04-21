@@ -5,7 +5,7 @@ import { DataChannel } from '../lib/data-channel.js';
 import { preSplitProofs } from '../lib/cashu-wallet.js';
 import { PaymentScheduler } from '../lib/payment-scheduler.js';
 import type { SignalingMessage } from '../types/signaling.js';
-import { saveSession, loadSession, updateSession } from '../lib/session-storage.js';
+import { saveSession, loadSession, updateSession, clearSession } from '../lib/session-storage.js';
 import { assertSameMint, MintMismatchError } from '../lib/mint-guard.js';
 import { getBalance, onBalanceChange, spendProofs } from '../lib/wallet-store.js';
 import { getMintUrl } from '../lib/config.js';
@@ -50,6 +50,16 @@ const exitSessionBtnEl = document.getElementById('exit-session-btn') as HTMLButt
 const budgetLowBannerEl = document.getElementById('budget-low-banner');
 const budgetLowTextEl = document.getElementById('budget-low-text');
 const countdownDisplayEl = document.getElementById('countdown-display');
+
+// Join confirmation overlay
+const joinConfirmOverlayEl = document.getElementById('join-confirm-overlay');
+const joinConfirmRateEl = document.getElementById('join-confirm-rate');
+const joinConfirmRatePerMinEl = document.getElementById('join-confirm-rate-per-min');
+const joinConfirmBalanceEl = document.getElementById('join-confirm-balance');
+const joinConfirmDurationEl = document.getElementById('join-confirm-duration');
+const joinConfirmMintEl = document.getElementById('join-confirm-mint');
+const joinConfirmAcceptBtn = document.getElementById('join-confirm-accept') as HTMLButtonElement | null;
+const joinConfirmCancelBtn = document.getElementById('join-confirm-cancel') as HTMLButtonElement | null;
 
 function showMintMismatch(sessionMint: string, localMint: string): void {
   if (sessionMintUrlEl !== null) sessionMintUrlEl.textContent = sessionMint;
@@ -248,19 +258,126 @@ let activeRateSatsPerInterval = DEFAULT_RATE_SATS;
 let activeIntervalSeconds = DEFAULT_INTERVAL_SECS;
 
 // Pre-populate from pending_join invite data if available (set by home.ts)
+let invitedRate: number | null = null;
+let invitedInterval: number | null = null;
+let invitedMintUrl: string | null = null;
+
 try {
   const pendingJoinRaw = sessionStorage.getItem('pending_join');
   if (pendingJoinRaw !== null) {
     const pendingJoin = JSON.parse(pendingJoinRaw) as Record<string, unknown>;
     if (typeof pendingJoin['rateSatsPerInterval'] === 'number') {
       activeRateSatsPerInterval = pendingJoin['rateSatsPerInterval'] as number;
+      invitedRate = activeRateSatsPerInterval;
     }
     if (typeof pendingJoin['intervalSeconds'] === 'number') {
       activeIntervalSeconds = pendingJoin['intervalSeconds'] as number;
+      invitedInterval = activeIntervalSeconds;
+    }
+    if (typeof pendingJoin['mintUrl'] === 'string') {
+      invitedMintUrl = pendingJoin['mintUrl'] as string;
     }
   }
 } catch {
   // sessionStorage read/parse failures are non-fatal
+}
+
+// ---------------------------------------------------------------------------
+// Join confirmation gate
+//
+// The viewer must explicitly accept the streamer's rate before any session
+// setup happens (camera/mic prompt, pre-split, offer/answer, scheduler). The
+// dialog is shown as soon as rate info is known — either from the invite
+// (pending_join) on page load, or from the first session_created signaling
+// message for a manual join.
+// ---------------------------------------------------------------------------
+
+let joinConfirmShown = false;
+let joinDecisionResolve: ((accepted: boolean) => void) | null = null;
+const joinDecisionPromise = new Promise<boolean>((resolve) => {
+  joinDecisionResolve = resolve;
+});
+
+function populateJoinConfirm(rate: number, interval: number, dialogMintUrl: string | null): void {
+  if (joinConfirmRateEl !== null) {
+    joinConfirmRateEl.innerHTML =
+      `<strong>${rate}</strong> <span class="sat">S</span> every <strong>${interval}</strong>s`;
+  }
+  if (joinConfirmRatePerMinEl !== null) {
+    if (interval > 0) {
+      const perMin = (rate * 60) / interval;
+      const formatted = Number.isInteger(perMin) ? String(perMin) : perMin.toFixed(1);
+      joinConfirmRatePerMinEl.innerHTML = `= ${formatted} <span class="sat">S</span>/min`;
+    } else {
+      joinConfirmRatePerMinEl.textContent = '';
+    }
+  }
+  const balance = getBalance();
+  if (joinConfirmBalanceEl !== null) {
+    joinConfirmBalanceEl.innerHTML = `${balance.toLocaleString()} <span class="sat">S</span>`;
+  }
+  if (joinConfirmDurationEl !== null) {
+    if (rate > 0 && interval > 0 && balance > 0) {
+      const totalSeconds = Math.floor(balance / rate) * interval;
+      if (totalSeconds >= 60) {
+        const mins = Math.floor(totalSeconds / 60);
+        const secs = totalSeconds % 60;
+        joinConfirmDurationEl.textContent =
+          secs > 0 ? `~${mins} min ${secs}s` : `~${mins} min`;
+      } else {
+        joinConfirmDurationEl.textContent = `~${totalSeconds}s`;
+      }
+    } else if (balance === 0) {
+      joinConfirmDurationEl.innerHTML = '<span class="warn">0 — deposit first</span>';
+    } else {
+      joinConfirmDurationEl.textContent = '—';
+    }
+  }
+  if (joinConfirmMintEl !== null) {
+    joinConfirmMintEl.textContent = dialogMintUrl ?? mintUrl;
+  }
+}
+
+function showJoinConfirm(rate: number, interval: number, dialogMintUrl: string | null): void {
+  if (joinConfirmShown) return;
+  joinConfirmShown = true;
+  populateJoinConfirm(rate, interval, dialogMintUrl);
+  if (joinConfirmOverlayEl !== null) {
+    joinConfirmOverlayEl.classList.remove('hidden');
+  }
+  joinConfirmAcceptBtn?.focus();
+}
+
+function hideJoinConfirm(): void {
+  if (joinConfirmOverlayEl !== null) {
+    joinConfirmOverlayEl.classList.add('hidden');
+  }
+}
+
+function resolveJoinDecision(accepted: boolean): void {
+  const resolve = joinDecisionResolve;
+  joinDecisionResolve = null;
+  if (resolve !== null) resolve(accepted);
+}
+
+if (joinConfirmAcceptBtn !== null) {
+  joinConfirmAcceptBtn.addEventListener('click', () => {
+    hideJoinConfirm();
+    resolveJoinDecision(true);
+  });
+}
+
+if (joinConfirmCancelBtn !== null) {
+  joinConfirmCancelBtn.addEventListener('click', () => {
+    hideJoinConfirm();
+    resolveJoinDecision(false);
+  });
+}
+
+// If the invite carried rate info, show the dialog before opening the
+// signaling socket so the viewer sees the cost before any session setup.
+if (invitedRate !== null && invitedInterval !== null) {
+  showJoinConfirm(invitedRate, invitedInterval, invitedMintUrl);
 }
 
 // ---------------------------------------------------------------------------
@@ -296,7 +413,11 @@ client.onConnect(() => {
     return;
   }
 
-  ui.setStatus('connected -- joining session\u2026');
+  ui.setStatus(
+    joinConfirmShown
+      ? 'connected -- awaiting your confirmation\u2026'
+      : 'connected -- loading session info\u2026',
+  );
   client.send({ type: 'join_session', sessionId });
 
   // Persist session state for reconnect recovery
@@ -311,24 +432,53 @@ client.onConnect(() => {
     );
   }
 
-  const existing = loadSession();
-  const isSameSession = existing !== null && existing.sessionId === sessionId;
-  saveSession({
-    sessionId,
-    peerId: isSameSession ? (existing.peerId ?? '') : '',
-    role: 'viewer',
-    chunkCount: isSameSession ? (existing.chunkCount ?? 0) : 0,
-    totalSatsPaid: isSameSession ? (existing.totalSatsPaid ?? 0) : 0,
-  });
-
-  // Start media in parallel with session join
-  void sharedStartMedia(peer, localVideoEl, ui.showError).then((stream) => {
-    localStream = stream;
-    if (stream !== null) {
-      console.log('[viewer] local media ready');
+  // All further setup (media prompt, session persistence) is gated on the
+  // viewer accepting the rate in the confirmation dialog.
+  void joinDecisionPromise.then((accepted) => {
+    if (!accepted) {
+      handleCancelledJoin();
+      return;
     }
+
+    // Persist session state only after acceptance so a cancelled join does
+    // not leave a phantom entry in localStorage.
+    const existing = loadSession();
+    const isSameSession = existing !== null && existing.sessionId === sessionId;
+    saveSession({
+      sessionId,
+      peerId: isSameSession ? (existing.peerId ?? '') : '',
+      role: 'viewer',
+      chunkCount: isSameSession ? (existing.chunkCount ?? 0) : 0,
+      totalSatsPaid: isSameSession ? (existing.totalSatsPaid ?? 0) : 0,
+    });
+
+    ui.setStatus('joining session…');
+    void sharedStartMedia(peer, localVideoEl, ui.showError).then((stream) => {
+      localStream = stream;
+      if (stream !== null) {
+        console.log('[viewer] local media ready');
+      }
+    });
   });
 });
+
+function handleCancelledJoin(): void {
+  console.log('[viewer] user cancelled join — tearing down');
+  ui.setStatus('cancelled');
+  scheduler?.stop();
+  if (sessionId !== null) {
+    // Safe even if the socket is not open — sendRaw guards against that.
+    client.send({ type: 'end_session', sessionId });
+  }
+  client.disconnect();
+  clearSession();
+  try {
+    sessionStorage.removeItem('pending_join');
+  } catch {
+    // sessionStorage may be unavailable — non-fatal
+  }
+  window.location.href = '/';
+}
 
 client.onDisconnecting(() => {
   ui.showReconnectOverlay();
@@ -487,14 +637,27 @@ client.onMessage((msg: SignalingMessage) => {
         activeIntervalSeconds = msg.intervalSeconds;
       }
       console.log('[viewer] rate config:', activeRateSatsPerInterval, 'sats /', activeIntervalSeconds, 's');
-      // Pre-split proofs into exact-denomination chunks before the session starts.
-      ui.setStatus('preparing wallet\u2026');
-      void preSplitProofs(activeRateSatsPerInterval, getBalance()).then((numChunks) => {
-        console.log(`[viewer] pre-split complete: ${numChunks} chunks of ${activeRateSatsPerInterval} sats`);
-        ui.setStatus('wallet ready — waiting for tutor\u2026');
-      }).catch((err: unknown) => {
-        const reason = err instanceof Error ? err.message : String(err);
-        ui.showError(`Pre-split failed: ${reason}`);
+
+      // Manual-entry flow: no invite data on page load, so the confirmation
+      // dialog could not be shown yet. Show it now with the authoritative
+      // rate from the signaling server.
+      if (!joinConfirmShown) {
+        showJoinConfirm(activeRateSatsPerInterval, activeIntervalSeconds, msg.mintUrl);
+      }
+
+      // Pre-split is gated on the viewer accepting the rate. If they cancel,
+      // the `onConnect` handler tears down the session — we just no-op here.
+      void joinDecisionPromise.then((accepted) => {
+        if (!accepted) return;
+        // Pre-split proofs into exact-denomination chunks before the session starts.
+        ui.setStatus('preparing wallet\u2026');
+        void preSplitProofs(activeRateSatsPerInterval, getBalance()).then((numChunks) => {
+          console.log(`[viewer] pre-split complete: ${numChunks} chunks of ${activeRateSatsPerInterval} sats`);
+          ui.setStatus('wallet ready — waiting for tutor\u2026');
+        }).catch((err: unknown) => {
+          const reason = err instanceof Error ? err.message : String(err);
+          ui.showError(`Pre-split failed: ${reason}`);
+        });
       });
       break;
 
@@ -530,6 +693,14 @@ client.onMessage((msg: SignalingMessage) => {
 async function handleOffer(offer: RTCSessionDescriptionInit): Promise<void> {
   if (sessionId === null) {
     ui.showError('Offer received but no sessionId');
+    return;
+  }
+
+  // Do not answer the offer until the viewer has accepted the rate. A
+  // cancelled join short-circuits the rest of the handshake here.
+  const accepted = await joinDecisionPromise;
+  if (!accepted) {
+    console.log('[viewer] offer ignored — viewer cancelled join');
     return;
   }
 

@@ -111,6 +111,39 @@
       </div>
     </div>
 
+    <!-- Join confirmation overlay (viewer-only) -->
+    <div id="join-confirm-overlay" class="hidden" role="alertdialog" aria-modal="true" aria-labelledby="join-confirm-title">
+      <div class="join-confirm-card">
+        <h2 id="join-confirm-title">Confirm Join</h2>
+        <p class="join-confirm-intro">The streamer is charging:</p>
+        <div class="join-confirm-rate-hero">
+          <span id="join-confirm-rate"></span>
+          <span class="join-confirm-rate-per-min" id="join-confirm-rate-per-min"></span>
+        </div>
+        <div class="join-confirm-details">
+          <div class="join-confirm-row">
+            <span class="label">Your balance</span>
+            <span class="value" id="join-confirm-balance">—</span>
+          </div>
+          <div class="join-confirm-row">
+            <span class="label">Watch time</span>
+            <span class="value" id="join-confirm-duration">—</span>
+          </div>
+          <div class="join-confirm-row join-confirm-mint-row">
+            <span class="label">Mint</span>
+            <span class="value mint"><code id="join-confirm-mint">—</code></span>
+          </div>
+        </div>
+        <p class="join-confirm-fine-print">
+          You will only be charged after you accept and the session starts. Cancel to return home — nothing will be charged.
+        </p>
+        <div class="join-confirm-actions">
+          <button id="join-confirm-cancel" type="button" class="btn-join-cancel">Cancel</button>
+          <button id="join-confirm-accept" type="button" class="btn-join-accept">Accept &amp; Join</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Mint mismatch blocking overlay (viewer-only) -->
     <div id="mint-mismatch-overlay" class="hidden" role="alertdialog" aria-modal="true" aria-labelledby="mint-mismatch-title">
       <div class="mint-mismatch-card">
