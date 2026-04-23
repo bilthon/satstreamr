@@ -243,6 +243,12 @@
         text-decoration: underline;
       }
 
+      .site-footer .sep {
+        margin: 0 var(--space-2);
+        color: var(--color-text-muted);
+        opacity: 0.5;
+      }
+
       /* ---- Reduced motion ---- */
       @media (prefers-reduced-motion: reduce) {
         *,
@@ -453,7 +459,13 @@
     </div>
 
     <footer class="site-footer">
-      <a href="/">Back to Satstreamr</a>
+      <a href="/">Home</a>
+      <span class="sep">·</span>
+      <a href="https://github.com/bilthon/satstreamr" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <span class="sep">·</span>
+      <a href="https://njump.me/npub1qqqqqzwwsdha2f5fvel4gtj02rgnw9syyuv4hqywg8unucgc9e3qxsll4h" target="_blank" rel="noopener noreferrer">Nostr</a>
+      <span class="sep">·</span>
+      <a href="mailto:satstreamr.ouqux@aleeas.com">Email</a>
     </footer>
   </body>
 </html>
