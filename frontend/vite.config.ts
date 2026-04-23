@@ -16,6 +16,7 @@ export default defineConfig({
       input: {
         index: resolve(__dirname, 'index.html'),
         room: resolve(__dirname, 'room.html'),
+        about: resolve(__dirname, 'about.html'),
       },
     }
   },

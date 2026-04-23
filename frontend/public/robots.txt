@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Allow: /about.html
+Disallow: /room.html
+
+# Sitemap: https://<your-domain>/sitemap.xml

@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>About — Satstreamr</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#10d9a0" />
+    <meta name="description" content="How Satstreamr works: peer-to-peer video streaming with Cashu ecash micropayments over a WebRTC data channel. No Lightning routing required during a session." />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="About — Satstreamr" />
+    <meta property="og:description" content="How Satstreamr works: peer-to-peer video streaming with Cashu ecash micropayments over a WebRTC data channel." />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="About — Satstreamr" />
+    <meta name="twitter:description" content="How Satstreamr works: peer-to-peer video streaming with Cashu ecash micropayments over a WebRTC data channel." />
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "About Satstreamr",
+      "description": "Technical explanation of how Satstreamr combines WebRTC video with Cashu ecash micropayments for per-minute streaming payments."
+    }
+    </script>
+    <link rel="stylesheet" href="/src/styles/design-tokens.css" />
+    <style>
+      *, *::before, *::after {
+        box-sizing: border-box;
+        margin: 0;
+      }
+
+      html {
+        -webkit-font-smoothing: antialiased;
+      }
+
+      body {
+        font-family: var(--font-ui);
+        max-width: 680px;
+        margin: var(--space-12) auto;
+        padding: 0 var(--space-6);
+        color: var(--color-text-primary);
+        background: var(--color-bg-base);
+        min-height: 100vh;
+        background-image:
+          radial-gradient(ellipse 80% 60% at 0% 0%, rgba(247,147,26,0.08) 0%, transparent 60%),
+          radial-gradient(ellipse 50% 40% at 100% 100%, rgba(124,58,237,0.07) 0%, transparent 50%);
+      }
+
+      /* ---- Breadcrumb nav ---- */
+      .breadcrumb {
+        font-size: var(--text-sm);
+        color: var(--color-text-muted);
+        margin-bottom: var(--space-8);
+      }
+
+      .breadcrumb a {
+        color: var(--color-text-accent);
+        text-decoration: none;
+      }
+
+      .breadcrumb a:hover {
+        text-decoration: underline;
+      }
+
+      /* ---- Page header ---- */
+      h1 {
+        font-size: 2rem;
+        font-weight: 800;
+        margin: 0 0 0.35rem;
+        background: var(--gradient-brand);
+        background-clip: text;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        line-height: 1.2;
+      }
+
+      .page-subtitle {
+        color: var(--color-text-secondary);
+        font-size: 1rem;
+        margin: 0 0 var(--space-10);
+        line-height: 1.6;
+      }
+
+      /* ---- Content sections ---- */
+      .content-section {
+        margin-bottom: var(--space-10);
+      }
+
+      h2 {
+        font-size: var(--text-xl);
+        font-weight: 700;
+        color: var(--color-text-primary);
+        margin: 0 0 var(--space-4);
+        padding-bottom: var(--space-2);
+        border-bottom: 1px solid var(--color-border-subtle);
+      }
+
+      h3 {
+        font-size: var(--text-lg);
+        font-weight: 600;
+        color: var(--color-text-primary);
+        margin: var(--space-6) 0 var(--space-3);
+      }
+
+      p {
+        font-size: var(--text-base);
+        line-height: 1.75;
+        color: var(--color-text-secondary);
+        margin: 0 0 var(--space-4);
+      }
+
+      /* ---- Glass cards ---- */
+      .card {
+        background: var(--glass-bg);
+        border: 1px solid var(--color-border-subtle);
+        border-radius: var(--radius-lg);
+        padding: 1.5rem var(--space-6);
+        margin-bottom: var(--space-6);
+        box-shadow: var(--shadow-card);
+      }
+
+      .card-accent {
+        border-color: var(--color-border-accent);
+        box-shadow: var(--shadow-glow-bitcoin);
+      }
+
+      /* ---- Flow diagram ---- */
+      .flow-diagram {
+        background: var(--color-bg-surface);
+        border: 1px solid var(--color-border-subtle);
+        border-radius: var(--radius-md);
+        padding: 1.25rem var(--space-6);
+        font-family: var(--font-mono);
+        font-size: var(--text-sm);
+        color: var(--color-text-secondary);
+        line-height: 1.8;
+        overflow-x: auto;
+        margin-bottom: var(--space-6);
+        white-space: pre;
+      }
+
+      /* ---- Comparison table ---- */
+      .comparison-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: var(--text-sm);
+        margin-bottom: var(--space-4);
+      }
+
+      .comparison-table th {
+        text-align: left;
+        color: var(--color-text-secondary);
+        font-weight: 600;
+        font-size: var(--text-xs);
+        padding: 0.4rem var(--space-3) 0.6rem;
+        border-bottom: 1px solid var(--color-border-default);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .comparison-table th:nth-child(2),
+      .comparison-table th:nth-child(3) {
+        text-align: center;
+      }
+
+      .comparison-table td {
+        padding: 0.55rem var(--space-3);
+        vertical-align: top;
+        color: var(--color-text-secondary);
+        border-bottom: 1px solid var(--color-border-subtle);
+      }
+
+      .comparison-table td:nth-child(2),
+      .comparison-table td:nth-child(3) {
+        text-align: center;
+      }
+
+      .comparison-table tbody tr:last-child td {
+        border-bottom: none;
+      }
+
+      .comparison-table .check {
+        color: var(--color-success);
+        font-weight: 600;
+      }
+
+      .comparison-table .cross {
+        color: var(--color-error);
+      }
+
+      /* ---- TL;DR highlight ---- */
+      .tldr-box {
+        background: rgba(247, 147, 26, 0.07);
+        border: 1px solid var(--color-border-accent);
+        border-left: 3px solid var(--color-bitcoin);
+        border-radius: var(--radius-md);
+        padding: 1.25rem var(--space-6);
+        margin-bottom: var(--space-6);
+      }
+
+      .tldr-box h3 {
+        color: var(--color-text-accent);
+        font-size: var(--text-base);
+        font-weight: 700;
+        margin: 0 0 var(--space-3);
+      }
+
+      .tldr-box p {
+        margin: 0;
+        font-size: var(--text-sm);
+        color: var(--color-text-secondary);
+      }
+
+      /* ---- Inline code ---- */
+      code {
+        font-family: var(--font-mono);
+        font-size: 0.88em;
+        color: var(--color-text-accent);
+        background: rgba(247, 147, 26, 0.08);
+        border: 1px solid rgba(247, 147, 26, 0.15);
+        border-radius: 4px;
+        padding: 0.1em 0.35em;
+      }
+
+      /* ---- Site footer ---- */
+      .site-footer {
+        margin-top: var(--space-12);
+        padding-top: var(--space-6);
+        border-top: 1px solid var(--color-border-subtle);
+        text-align: center;
+        font-size: var(--text-sm);
+        color: var(--color-text-muted);
+      }
+
+      .site-footer a {
+        color: var(--color-text-accent);
+        text-decoration: none;
+      }
+
+      .site-footer a:hover {
+        text-decoration: underline;
+      }
+
+      .site-footer .sep {
+        margin: 0 var(--space-2);
+        color: var(--color-text-muted);
+        opacity: 0.5;
+      }
+
+      /* ---- Reduced motion ---- */
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="/">Satstreamr</a> &rsaquo; About
+    </nav>
+
+    <h1>How Satstreamr Works</h1>
+    <p class="page-subtitle">
+      Peer-to-peer video streaming with per-minute Cashu micropayments.
+      No Lightning routing during a session, no accounts.
+    </p>
+
+    <!-- What is it -->
+    <section class="content-section">
+      <h2>What It Is</h2>
+      <p>
+        Satstreamr connects a streamer and a viewer directly over WebRTC.
+        Before the stream starts, the viewer's wallet pre-splits its proofs into exact
+        per-cycle denominations. Every few seconds, the viewer's browser picks one
+        pre-split token from the pool and sends it over the WebRTC data channel. The
+        streamer redeems it with the Cashu mint and acknowledges receipt. If the
+        viewer's pool runs out, the session ends automatically.
+      </p>
+      <p>
+        Lightning is used only at the edges: to fund the viewer's wallet (deposit) and
+        to cash out the streamer's accumulated proofs (withdrawal). The payment loop itself
+        never touches the Lightning Network.
+      </p>
+    </section>
+
+    <!-- Token flow diagram -->
+    <section class="content-section">
+      <h2>Token Flow</h2>
+      <div class="flow-diagram" aria-label="Token flow diagram">Viewer                          Streamer                 Cashu Mint
+  |                               |                       |
+  |-- deposit via Lightning -----------------------------&gt;|
+  |&lt;-- Cashu proofs issued --------------------------------|
+  |                               |                       |
+  |  [pre-split proofs into       |                       |
+  |   exact-denomination chunks]  |                       |
+  |                               |                       |
+  |-- WebRTC offer/answer --------&gt;|                      |
+  |&lt;--------------------------------------------- ICE ----|
+  |  [data channel open]          |                       |
+  |                               |                       |
+  |  every N seconds:             |                       |
+  |-- send token (proofs) -------&gt;|                       |
+  |                               |-- NUT-07 state check -&gt;|
+  |                               |&lt;-- unspent ------------|
+  |                               |-- NUT-03 swap (claim) -&gt;|
+  |                               |&lt;-- new proofs ----------|
+  |&lt;-- payment_ack ---------------|                       |
+  |                               |                       |
+  |  [session ends]               |                       |
+  |                               |-- melt (LN invoice) --&gt;|
+  |                               |&lt;-- Lightning paid -----|</div>
+      <p>
+        The <code>preSplitProofs</code> step runs after the viewer accepts the rate
+        and before the WebRTC handshake completes. It ensures the viewer's wallet
+        holds proofs in denominations that exactly match the agreed per-interval amount,
+        so each payment cycle sends a single clean token with no change.
+      </p>
+    </section>
+
+    <!-- Why Cashu -->
+    <section class="content-section">
+      <h2>Why Cashu Fits This Use Case</h2>
+      <p>
+        Streaming payments have strict latency requirements. Completing a Lightning
+        payment during a live session would require a round-trip through the routing
+        network for every interval — adding hundreds of milliseconds of variable
+        latency and introducing routing failure modes. Cashu sidesteps this entirely.
+      </p>
+      <div class="card">
+        <table class="comparison-table" aria-label="Lightning vs Cashu for streaming payments">
+          <thead>
+            <tr>
+              <th>Property</th>
+              <th>Lightning (per interval)</th>
+              <th>Cashu (per interval)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Settlement latency</td>
+              <td>hundreds of ms, variable</td>
+              <td>tens of ms (HTTP roundtrip to mint)</td>
+            </tr>
+            <tr>
+              <td>Routing failure risk</td>
+              <td class="cross">&#10007; Yes — path may fail</td>
+              <td class="check">&#10003; No routing involved</td>
+            </tr>
+            <tr>
+              <td>Counterparty online required</td>
+              <td class="cross">&#10007; Both nodes must be up</td>
+              <td class="check">&#10003; Only the mint</td>
+            </tr>
+            <tr>
+              <td>Bearer token transfer</td>
+              <td class="cross">&#10007; No — invoice-bound</td>
+              <td class="check">&#10003; Yes — send over any channel</td>
+            </tr>
+            <tr>
+              <td>Minimum practical amount</td>
+              <td>Routing fees are unpredictable — vary with route selection and liquidity availability</td>
+              <td>Predictable — mint fees are known up front, no routing variability</td>
+            </tr>
+            <tr>
+              <td>Custodial risk</td>
+              <td class="check">&#10003; Non-custodial</td>
+              <td class="cross">&#10007; Mint custodies proofs</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Cashu tokens are plain bearer instruments: whoever holds the proofs can redeem
+        them. That property lets the viewer encode a payment as a binary blob and push
+        it over a WebRTC data channel — the same channel carrying video metadata.
+        The streamer redeems with the mint and sends an ack; no other coordination is needed.
+      </p>
+      <p>
+        Just bearer tokens, a mint, and a WebRTC data channel. The simplicity is the point.
+      </p>
+    </section>
+
+    <!-- Security model -->
+    <section class="content-section">
+      <h2>Security and Trust Model</h2>
+
+      <h3>Mint trust</h3>
+      <p>
+        Both streamer and viewer must use the same Cashu mint. The mint is a trusted third
+        party: it issues proofs and settles swaps. If the mint is dishonest or goes offline,
+        accumulated proofs cannot be redeemed. For self-hosted deployments (e.g. on Umbrel),
+        the operator runs their own mint, which limits external custodial risk.
+      </p>
+
+      <h3>Double-spend protection</h3>
+      <p>
+        When the streamer receives a token, the code first calls the mint's NUT-07 state-check
+        endpoint to confirm the proofs are unspent before attempting a NUT-03 swap.
+        This catches replayed tokens without needing a local spent-proof database.
+      </p>
+
+      <h3>WebRTC transport</h3>
+      <p>
+        The data channel is encrypted by DTLS (mandatory in WebRTC). Tokens are base64-encoded
+        Cashu strings, so a passive observer would need to break DTLS to read them. The
+        signaling server (used only for SDP offer/answer exchange) never sees token data.
+      </p>
+
+      <h3>What Satstreamr does not protect against</h3>
+      <p>
+        A malicious streamer could take tokens and not stream video — there is no on-chain
+        enforcement. A malicious viewer could send double-spent tokens; the NUT-07 check
+        catches this but requires the mint to be reachable. These are acceptable trade-offs
+        for a low-stakes, self-hosted tool where both parties are typically known to each other.
+      </p>
+    </section>
+
+    <!-- Architecture -->
+    <section class="content-section">
+      <h2>Architecture</h2>
+      <div class="card">
+        <p style="margin-bottom: var(--space-2);">
+          <strong>Frontend</strong> — Static HTML/TypeScript app (Vite + Vanilla TS).
+          All wallet logic runs in the browser; there is no backend holding funds.
+        </p>
+        <p style="margin-bottom: var(--space-2);">
+          <strong>Signaling server</strong> — Minimal WebSocket server for SDP and ICE
+          candidate exchange. Stateless with respect to payments.
+        </p>
+        <p style="margin-bottom: var(--space-2);">
+          <strong>Cashu mint</strong> — Standard Nutshell-compatible mint. Handles
+          Lightning deposits (NUT-04), proof swaps (NUT-03), state checks (NUT-07),
+          and Lightning withdrawals (NUT-05).
+        </p>
+        <p style="margin: 0;">
+          <strong>WebRTC</strong> — Browser-native peer connection. Video/audio over
+          media tracks; token payments over a separate ordered data channel.
+        </p>
+      </div>
+    </section>
+
+    <!-- TL;DR -->
+    <div class="tldr-box">
+      <h3>TL;DR</h3>
+      <p>
+        Viewer funds a Cashu wallet via Lightning. During a session, the viewer's browser
+        sends Cashu tokens to the streamer's browser over a WebRTC data channel every N seconds.
+        The streamer swaps each token with the mint for fresh proofs and sends an ack. At session
+        end, the streamer cashes out via Lightning. Lightning handles the rails; Cashu handles
+        the per-second accounting without touching the routing network.
+      </p>
+    </div>
+
+    <footer class="site-footer">
+      <a href="/">Home</a>
+      <span class="sep">·</span>
+      <a href="https://github.com/bilthon/satstreamr" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <span class="sep">·</span>
+      <a href="https://njump.me/npub1qqqqqzwwsdha2f5fvel4gtj02rgnw9syyuv4hqywg8unucgc9e3qxsll4h" target="_blank" rel="noopener noreferrer">Nostr</a>
+      <span class="sep">·</span>
+      <a href="mailto:satstreamr.ouqux@aleeas.com">Email</a>
+    </footer>
+  </body>
+</html>
