@@ -2,7 +2,9 @@
 
 Satstreamr is a peer-to-peer metered live video tutoring platform. A viewer connects directly to a tutor's browser over WebRTC and pays in Cashu e-cash micropayments sent over a WebRTC data channel — no payment processor required.
 
-<img src="docs/images/hero.png" alt="Satstreamr home page: wallet balance, Start Streaming and Join a Stream cards, and recent sessions list" width="600">
+<p align="center">
+  <img src="docs/images/hero.png" alt="Satstreamr home page: wallet balance, Start Streaming and Join a Stream cards, and recent sessions list" width="600">
+</p>
 
 This README covers the local development setup (regtest Lightning + local mint). For production deployment behind nginx, see [INSTALL.md](INSTALL.md).
 
