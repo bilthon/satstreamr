@@ -269,7 +269,6 @@
     <h1>How Satstreamr Works</h1>
     <p class="page-subtitle">
       Peer-to-peer video streaming with per-minute Cashu micropayments.
-      No Lightning routing during a session, no accounts.
     </p>
 
     <!-- What is it -->
@@ -326,12 +325,12 @@
 
     <!-- Why Cashu -->
     <section class="content-section">
-      <h2>Why Cashu Fits This Use Case</h2>
+      <h2>Why Cashu, not Lightning, during the session</h2>
       <p>
-        Streaming payments have strict latency requirements. Completing a Lightning
-        payment during a live session would require a round-trip through the routing
-        network for every interval — adding hundreds of milliseconds of variable
-        latency and introducing routing failure modes. Cashu sidesteps this entirely.
+        Completing a Lightning payment during a live session would require a round-trip
+        through the routing network for every interval — adding hundreds of milliseconds
+        of variable latency and introducing routing failure modes. Cashu tokens settle
+        with a single HTTP request to the mint instead.
       </p>
       <div class="card">
         <table class="comparison-table" aria-label="Lightning vs Cashu for streaming payments">
@@ -345,8 +344,8 @@
           <tbody>
             <tr>
               <td>Settlement latency</td>
-              <td>hundreds of ms, variable</td>
-              <td>tens of ms (HTTP roundtrip to mint)</td>
+              <td class="cross">&#10007; hundreds of ms, variable</td>
+              <td class="check">&#10003; tens of ms, constant (HTTP roundtrip to mint)</td>
             </tr>
             <tr>
               <td>Routing failure risk</td>
@@ -354,19 +353,9 @@
               <td class="check">&#10003; No routing involved</td>
             </tr>
             <tr>
-              <td>Counterparty online required</td>
-              <td class="cross">&#10007; Both nodes must be up</td>
-              <td class="check">&#10003; Only the mint</td>
-            </tr>
-            <tr>
-              <td>Bearer token transfer</td>
-              <td class="cross">&#10007; No — invoice-bound</td>
-              <td class="check">&#10003; Yes — send over any channel</td>
-            </tr>
-            <tr>
-              <td>Minimum practical amount</td>
-              <td>Routing fees are unpredictable — vary with route selection and liquidity availability</td>
-              <td>Predictable — mint fees are known up front, no routing variability</td>
+              <td>Fee predictability</td>
+              <td class="cross">&#10007; Routing fees vary with route selection and liquidity availability</td>
+              <td class="check">&#10003; Mint fees are known up front, no routing variability</td>
             </tr>
             <tr>
               <td>Custodial risk</td>
@@ -377,13 +366,10 @@
         </table>
       </div>
       <p>
-        Cashu tokens are plain bearer instruments: whoever holds the proofs can redeem
+        Cashu tokens are bearer instruments: whoever holds the proofs can redeem
         them. That property lets the viewer encode a payment as a binary blob and push
         it over a WebRTC data channel — the same channel carrying video metadata.
         The streamer redeems with the mint and sends an ack; no other coordination is needed.
-      </p>
-      <p>
-        Just bearer tokens, a mint, and a WebRTC data channel. The simplicity is the point.
       </p>
     </section>
 
@@ -415,10 +401,10 @@
 
       <h3>What Satstreamr does not protect against</h3>
       <p>
-        A malicious streamer could take tokens and not stream video — there is no on-chain
-        enforcement. A malicious viewer could send double-spent tokens; the NUT-07 check
-        catches this but requires the mint to be reachable. These are acceptable trade-offs
-        for a low-stakes, self-hosted tool where both parties are typically known to each other.
+        A malicious streamer could take tokens and not stream video — there is no atomicity
+        guarantee between payment and content delivery. A malicious viewer could send double-spent tokens; the NUT-07 check
+        catches this but requires the mint to be reachable. Satstreamr assumes both parties
+        are known to each other and the session stakes are low.
       </p>
     </section>
 
@@ -453,8 +439,7 @@
         Viewer funds a Cashu wallet via Lightning. During a session, the viewer's browser
         sends Cashu tokens to the streamer's browser over a WebRTC data channel every N seconds.
         The streamer swaps each token with the mint for fresh proofs and sends an ack. At session
-        end, the streamer cashes out via Lightning. Lightning handles the rails; Cashu handles
-        the per-second accounting without touching the routing network.
+        end, the streamer cashes out via Lightning.
       </p>
     </div>
 
