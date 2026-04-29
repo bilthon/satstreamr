@@ -6,6 +6,8 @@ Satstreamr is a peer-to-peer metered live video tutoring platform. A viewer conn
   <img src="docs/images/hero.png" alt="Satstreamr home page: wallet balance, Start Streaming and Join a Stream cards, and recent sessions list" width="600">
 </p>
 
+**Live version:** [satstreamr.com](satstreamr.com)
+
 This README covers the local development setup (regtest Lightning + local mint). For production deployment behind nginx, see [INSTALL.md](INSTALL.md).
 
 ---
