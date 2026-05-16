@@ -317,4 +317,9 @@ The Python virtual environment has not been created. See Step 2 for the `python3
 
 ## License
 
-MIT
+satstreamr is released under the [MIT License](LICENSE).
+
+Third-party dependencies retain their own licenses; all current runtime
+and build-time dependencies are MIT or MIT-compatible. The "satstreamr"
+name and logo are not covered by the MIT grant and are reserved by the
+author.
