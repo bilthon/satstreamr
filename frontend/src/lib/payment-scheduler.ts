@@ -15,27 +15,15 @@
  *   testable in a node environment.
  */
 
-import type { DataChannel } from './data-channel.js';
-import type { Proof } from '../types/cashu.js';
-import { getBalance } from './wallet-store.js';
+import type { PaymentSource, PaymentTransport } from '../payments/ports.js';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-/**
- * Synchronous function that selects proofs from the local wallet store for
- * the given amount. No mint call required — proofs were pre-split at session
- * start and are already in the correct denomination.
- */
-export type SelectProofsFn = (amountSats: number) => Proof[];
-
-export type EncodeTokenFn = (proofs: Proof[], mintUrl: string) => string;
-
 export interface PaymentSchedulerOpts {
   intervalSecs: number;
   chunkSats: number;
-  mintUrl: string;
   /** Initial chunkId — caller loads this from session storage. */
   initialChunkId?: number;
   /** Initial totalSatsPaid — caller loads this from session storage. */
@@ -57,9 +45,8 @@ const ACK_TIMEOUT_MS = 5_000;
 // ---------------------------------------------------------------------------
 
 export class PaymentScheduler {
-  private readonly dc: DataChannel;
-  private readonly selectProofs: SelectProofsFn;
-  private readonly encodeToken: EncodeTokenFn;
+  private readonly dc: PaymentTransport;
+  private readonly paymentSource: PaymentSource;
   private readonly opts: Readonly<Required<PaymentSchedulerOpts>>;
 
   // Mutable scheduler state
@@ -84,14 +71,12 @@ export class PaymentScheduler {
   private chunkPaidListeners: Array<(chunkId: number, totalPaid: number, balance: number) => void> = [];
 
   constructor(
-    dataChannel: DataChannel,
-    selectProofsFn: SelectProofsFn,
-    encodeTokenFn: EncodeTokenFn,
+    dataChannel: PaymentTransport,
+    paymentSource: PaymentSource,
     opts: PaymentSchedulerOpts,
   ) {
     this.dc = dataChannel;
-    this.selectProofs = selectProofsFn;
-    this.encodeToken = encodeTokenFn;
+    this.paymentSource = paymentSource;
 
     // Apply defaults for optional fields
     this.opts = {
@@ -167,19 +152,18 @@ export class PaymentScheduler {
       return;
     }
 
-    // Check wallet balance before attempting to select proofs.
-    if (getBalance() < this.opts.chunkSats) {
+    // Check available balance before preparing a payment.
+    if (this.paymentSource.getBalance() < this.opts.chunkSats) {
       this.fireBudgetExhausted();
       return;
     }
 
     const chunkId = this.chunkId;
 
-    // Synchronously select pre-split proofs from the wallet for this chunk.
+    // Preparation spends/reserves funds synchronously before transmission.
     let encodedToken: string;
     try {
-      const proofs = this.selectProofs(this.opts.chunkSats);
-      encodedToken = this.encodeToken(proofs, this.opts.mintUrl);
+      encodedToken = this.paymentSource.preparePayment(this.opts.chunkSats);
     } catch (err: unknown) {
       const reason = err instanceof Error ? err.message : String(err);
       console.error('[payment-scheduler] selectProofs failed:', reason);
@@ -251,7 +235,7 @@ export class PaymentScheduler {
 
     this.persistState();
 
-    const balance = getBalance();
+    const balance = this.paymentSource.getBalance();
 
     // Notify listeners
     for (const cb of this.chunkPaidListeners) {
