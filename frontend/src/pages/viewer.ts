@@ -1,13 +1,10 @@
-import { getEncodedToken } from '@cashu/cashu-ts';
+import { createCashuSender, MintMismatchError, validateCashuSessionMint } from '../payments/cashu-session-payments.js';
+import type { SendingSession } from '../payments/session-payments.js';
 import { SignalingClient } from '../signaling-client.js';
 import { PeerConnection } from '../lib/peer-connection.js';
 import { DataChannel } from '../lib/data-channel.js';
-import { preSplitProofs } from '../lib/cashu-wallet.js';
-import { PaymentScheduler } from '../lib/payment-scheduler.js';
 import type { SignalingMessage } from '../types/signaling.js';
 import { saveSession, loadSession, updateSession, clearSession } from '../lib/session-storage.js';
-import { assertSameMint, MintMismatchError } from '../lib/mint-guard.js';
-import { getBalance, onBalanceChange, spendProofs } from '../lib/wallet-store.js';
 import { getMintUrl } from '../lib/config.js';
 import { getSignalingUrl } from '../lib/signaling-url.js';
 import { createSessionUI } from '../lib/session-ui.js';
@@ -18,6 +15,8 @@ import { showToast } from '../lib/toast.js';
 
 const signalingUrl = getSignalingUrl();
 const mintUrl = getMintUrl();
+const payments = createCashuSender();
+const { getBalance, onBalanceChange } = payments;
 
 // ---------------------------------------------------------------------------
 // UI element references
@@ -386,7 +385,7 @@ if (invitedRate !== null && invitedInterval !== null) {
 
 let localStream: MediaStream | null = null;
 let dataChannel: DataChannel | null = null;
-let scheduler: PaymentScheduler | null = null;
+let scheduler: SendingSession | null = null;
 let peer = new PeerConnection();
 
 // ---------------------------------------------------------------------------
@@ -543,15 +542,8 @@ function setupPeerHandlers(): void {
         updateBudgetDisplay(balance);
       });
 
-      scheduler = new PaymentScheduler(
+      scheduler = payments.createSession(
         dataChannel,
-        {
-          getBalance,
-          preparePayment: (amountSats) => {
-            const proofs = spendProofs(amountSats);
-            return getEncodedToken({ mint: mintUrl, proofs, unit: 'sat' });
-          },
-        },
         {
           intervalSecs: activeIntervalSeconds,
           chunkSats: activeRateSatsPerInterval,
@@ -623,7 +615,7 @@ client.onMessage((msg: SignalingMessage) => {
     case 'session_created':
       // Viewer receives session_created after joining; verify mint and pre-split proofs.
       try {
-        assertSameMint(msg.mintUrl);
+        validateCashuSessionMint(msg.mintUrl);
       } catch (err) {
         if (err instanceof MintMismatchError) {
           showMintMismatch(err.sessionMintUrl, err.localMintUrl);
@@ -654,7 +646,7 @@ client.onMessage((msg: SignalingMessage) => {
         if (!accepted) return;
         // Pre-split proofs into exact-denomination chunks before the session starts.
         ui.setStatus('preparing wallet\u2026');
-        void preSplitProofs(activeRateSatsPerInterval, getBalance()).then((numChunks) => {
+        void payments.prepare(activeRateSatsPerInterval).then((numChunks) => {
           console.log(`[viewer] pre-split complete: ${numChunks} chunks of ${activeRateSatsPerInterval} sats`);
           ui.setStatus('wallet ready — waiting for tutor\u2026');
         }).catch((err: unknown) => {

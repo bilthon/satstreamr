@@ -1,12 +1,10 @@
-import { getDecodedToken } from '@cashu/cashu-ts';
-import type { Proof } from '../types/cashu.js';
+import { createCashuReceiver, createCashuWallet } from '../payments/cashu-session-payments.js';
+import type { CashOut, CashOutQuote } from '../payments/session-payments.js';
 import { SignalingClient } from '../signaling-client.js';
 import { PeerConnection } from '../lib/peer-connection.js';
 import { DataChannel } from '../lib/data-channel.js';
-import { buildWallet, checkTokenState, claimProofs, getMeltQuote, meltTokens } from '../lib/cashu-wallet.js';
 import type { SignalingMessage } from '../types/signaling.js';
 import { saveSession, loadSession, clearSession } from '../lib/session-storage.js';
-import { getProofs, addProofs } from '../lib/wallet-store.js';
 import { createInviteUrl } from '../lib/session-invite.js';
 import { getMintUrl } from '../lib/config.js';
 import { getSignalingUrl } from '../lib/signaling-url.js';
@@ -16,6 +14,7 @@ import { createSessionSummary } from '../lib/session-summary.js';
 import { wireSharedPeerHandlers, recreatePeer } from '../lib/peer-setup.js';
 
 const signalingUrl = getSignalingUrl();
+const wallet = createCashuWallet();
 
 // ---------------------------------------------------------------------------
 // UI element references
@@ -243,8 +242,8 @@ function validInvoicePrefix(): string {
 function wireCashOut(): void {
   if (invoiceInputEl === null || payInvoiceBtnEl === null) return;
 
-  // Load accumulated proofs from the persistent wallet store
-  const accumulatedProofs: Proof[] = getProofs();
+  // Capture the available funds when wiring the summary, as before.
+  const cashOut = wallet.createCashOut();
 
   // Invoice input: validate prefix and start countdown on paste/input
   invoiceInputEl.addEventListener('input', () => {
@@ -267,11 +266,11 @@ function wireCashOut(): void {
 
   // Pay button click handler
   payInvoiceBtnEl.addEventListener('click', () => {
-    void handlePayInvoice(accumulatedProofs);
+    void handlePayInvoice(cashOut);
   });
 }
 
-async function handlePayInvoice(proofs: Proof[]): Promise<void> {
+async function handlePayInvoice(cashOut: CashOut): Promise<void> {
   if (invoiceInputEl === null || payInvoiceBtnEl === null) return;
 
   const invoice = invoiceInputEl.value.trim();
@@ -289,7 +288,7 @@ async function handlePayInvoice(proofs: Proof[]): Promise<void> {
     return;
   }
 
-  if (proofs.length === 0) {
+  if (!cashOut.hasFunds) {
     setCashoutStatus('No accumulated proofs to pay with.', true);
     return;
   }
@@ -297,17 +296,10 @@ async function handlePayInvoice(proofs: Proof[]): Promise<void> {
   payInvoiceBtnEl.disabled = true;
   setCashoutStatus('Fetching quote\u2026');
 
-  let quoteId: string;
-  let amount: number;
-  let feeReserve: number;
-  let inputFee: number;
+  let quote: CashOutQuote;
 
   try {
-    const quote = await getMeltQuote(invoice, proofs);
-    quoteId = quote.quote;
-    amount = quote.amount;
-    feeReserve = quote.fee_reserve;
-    inputFee = quote.inputFee;
+    quote = await cashOut.quote(invoice);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     setCashoutStatus(msg, true);
@@ -315,25 +307,13 @@ async function handlePayInvoice(proofs: Proof[]): Promise<void> {
     return;
   }
 
-  const totalNeeded = amount + feeReserve + inputFee;
-  const proofTotal = proofs.reduce((s, p) => s + p.amount, 0);
-  if (proofTotal < totalNeeded) {
-    setCashoutStatus(
-      `Insufficient proofs — have ${proofTotal}, need ${totalNeeded} (${amount} + ${feeReserve} fee + ${inputFee} input fee).`,
-      true
-    );
-    payInvoiceBtnEl.disabled = false;
-    return;
-  }
-
+  const { amount, feeReserve, inputFee } = quote;
   setCashoutStatus(`Paying ${String(amount)} <span class="sat">S</span> + up to ${String(feeReserve + inputFee)} <span class="sat">S</span> fee\u2026`, false, true);
 
   try {
-    const result = await meltTokens(invoice, quoteId, proofs);
+    const result = await quote.pay();
     if (result.paid) {
-      // Add change proofs back to wallet (NUT-08: unused fee reserve)
-      const changeSats = result.change.reduce((s, p) => s + p.amount, 0);
-      if (result.change.length > 0) addProofs(result.change);
+      const { changeSats } = result;
       clearInvoiceCountdown();
       if (invoiceInputEl !== null) invoiceInputEl.value = '';
       const changeNote = changeSats > 0 ? ` (${changeSats} sats fee change returned)` : '';
@@ -361,8 +341,8 @@ function getRateConfig(): { rateSatsPerInterval: number; intervalSeconds: number
   return { rateSatsPerInterval: sats, intervalSeconds: interval };
 }
 
-/** Mint's input fee in parts-per-thousand; loaded from keyset on page init. */
-let mintFeePpk: number | null = null;
+/** Estimated receiving fee in sats; loaded on page init. */
+let receiptFee = 0;
 
 /** Update the effective-rate display: (sats / interval * 60) sats/min. */
 function updateEffectiveRateDisplay(): void {
@@ -371,16 +351,10 @@ function updateEffectiveRateDisplay(): void {
   effectiveRateDisplayEl.textContent = (rateSatsPerInterval / intervalSeconds * 60).toFixed(1);
 }
 
-/** Estimated swap fee for a single proof (1 input) at the current feePpk. */
-function estimatedFeePerCycle(): number {
-  if (mintFeePpk === null || mintFeePpk === 0) return 0;
-  return Math.max(1, Math.ceil(mintFeePpk / 1000));
-}
-
-/** Update the fee overhead display based on current rate and feePpk. */
+/** Update the fee overhead display based on the rate and estimated receipt fee. */
 function updateFeeOverheadDisplay(): void {
   if (feeOverheadDisplayEl === null) return;
-  const fee = estimatedFeePerCycle();
+  const fee = receiptFee;
   if (fee === 0) {
     feeOverheadDisplayEl.textContent = 'none';
     feeOverheadDisplayEl.classList.remove('warn');
@@ -409,8 +383,8 @@ updateEffectiveRateDisplay();
 updateFeeOverheadDisplay();
 
 // Fetch mint fee info for the overhead display
-void buildWallet().then(({ feePpk }) => {
-  mintFeePpk = feePpk;
+void wallet.estimateReceiptFee().then((fee) => {
+  receiptFee = fee;
   updateFeeOverheadDisplay();
 }).catch((err: unknown) => {
   console.warn('[tutor] could not fetch mint fee info:', err);
@@ -440,8 +414,12 @@ let localStream: MediaStream | null = null;
 let dataChannel: DataChannel | null = null;
 let peer = new PeerConnection();
 
-/** Last chunkId successfully processed. Starts at -1 so first chunkId=0 is valid. */
-let lastSeenChunkId = -1;
+/** Keep receipt state across channel replacement; reset when a viewer joins. */
+const receiver = createCashuReceiver({
+  sendMessage: message => dataChannel!.sendMessage(message),
+  onReceived: updateSatsReceived,
+  onReady: () => sessionSummary.hidePaymentPausedBanner(),
+});
 
 // ---------------------------------------------------------------------------
 // Signaling client
@@ -563,78 +541,12 @@ function setupPeerHandlers(): void {
         return;
       }
 
-      const { chunkId, encodedToken } = msg;
-
-      // Validate chunkId is strictly greater than last seen
-      if (chunkId <= lastSeenChunkId) {
-        console.warn(
-          `[payment] duplicate/out-of-order chunk #${chunkId} (last seen: ${lastSeenChunkId}) -- nack`,
-        );
-        dataChannel?.sendMessage({ type: 'payment_nack', chunkId, reason: 'duplicate_chunk_id' });
-        return;
-      }
-
-      void handleTokenPayment(chunkId, encodedToken);
+      if (dataChannel !== null) void receiver.receive(msg.chunkId, msg.encodedToken);
     });
   };
 }
 
 setupPeerHandlers();
-
-async function handleTokenPayment(chunkId: number, encodedToken: string): Promise<void> {
-  if (dataChannel === null) return;
-
-  // 1. Decode the token
-  let proofs: ReturnType<typeof getDecodedToken>['proofs'];
-  try {
-    const decoded = getDecodedToken(encodedToken);
-    proofs = decoded.proofs;
-  } catch (err: unknown) {
-    const reason = err instanceof Error ? err.message : String(err);
-    console.error(`[payment] failed to decode token for chunk #${chunkId}:`, reason);
-    dataChannel.sendMessage({ type: 'payment_nack', chunkId, reason: `decode_error: ${reason}` });
-    return;
-  }
-
-  // 2. NUT-07 state check -- belt-and-suspenders double-spend detection
-  try {
-    const state = await checkTokenState(proofs);
-    if (state === 'spent') {
-      console.warn(`[payment] chunk #${chunkId} already spent -- nack`);
-      dataChannel.sendMessage({ type: 'payment_nack', chunkId, reason: 'double_spend' });
-      return;
-    }
-  } catch (err: unknown) {
-    const reason = err instanceof Error ? err.message : String(err);
-    console.error(`[payment] checkTokenState failed for chunk #${chunkId}:`, reason);
-    dataChannel.sendMessage({ type: 'payment_nack', chunkId, reason: `state_check_error: ${reason}` });
-    return;
-  }
-
-  // 3. Claim proofs via plain NUT-03 swap (no P2PK signature required)
-  try {
-    const { newProofs } = await claimProofs(proofs);
-    lastSeenChunkId = chunkId;
-    console.log(`[payment] ack #${chunkId}`);
-    dataChannel.sendMessage({ type: 'payment_ack', chunkId });
-
-    // Update the sats-received counter using the post-redemption proof amounts
-    // (i.e. after the mint has deducted its swap fee), so the displayed total
-    // reflects what the tutor actually holds.
-    const chunkSats = newProofs.reduce((sum: number, p: Proof) => sum + p.amount, 0);
-    updateSatsReceived(chunkSats);
-
-    // Persist the newly redeemed proofs to the wallet store for cash-out.
-    addProofs(newProofs);
-
-    // If the payment was previously paused and a new chunk just succeeded, hide the banner.
-    sessionSummary.hidePaymentPausedBanner();
-  } catch (err: unknown) {
-    const reason = err instanceof Error ? err.message : String(err);
-    console.error(`[payment] claimProofs failed for chunk #${chunkId}:`, reason);
-    dataChannel.sendMessage({ type: 'payment_nack', chunkId, reason });
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Message handler
@@ -810,7 +722,7 @@ async function handleViewerJoined(): Promise<void> {
   // leaves and rejoins.
   peer = recreatePeer(peer);
   setupPeerHandlers();
-  lastSeenChunkId = -1;
+  receiver.reset();
   dataChannel = null;
 
   try {
