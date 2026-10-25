@@ -14,6 +14,19 @@ This README covers the local development setup (regtest Lightning + local mint).
 
 ## Architecture
 
+The home page uses Vue 3 + TypeScript (`frontend/src/app/HomeApp.vue`). Its
+`use-home.ts` module owns view state and lifecycle cleanup; funding, withdrawal,
+and Cashu denomination summaries go through the `HomeWallet` application
+interface and concrete `cashu-home-wallet.ts` adapter. The adapter reuses the
+existing Cashu helpers and wallet store; bearer proofs never enter Vue state.
+The room page remains unchanged and `about.html` remains static. Home CSS stays
+global in `index.html`, with no added layout wrapper or client-side router.
+
+Closing/resetting the deposit view stops polling. It does not cancel a Lightning
+invoice or reverse an already submitted mint/withdrawal operation. Tests use
+mocked financial dependencies; run `cd frontend && npm test`. The frontend build
+runs `vue-tsc --noEmit && vite build`, including SFC type checking.
+
 ```
                         ┌─────────────────────────┐
                         │   Signaling Server       │
@@ -56,8 +69,8 @@ This README covers the local development setup (regtest Lightning + local mint).
 
 | Dependency | Minimum version | Notes |
 |---|---|---|
-| Node.js | 18+ | Required for frontend and signaling server |
-| npm | 9+ | Bundled with Node.js 18 |
+| Node.js | 22.4.0+ | Required by the existing Cashu SDK; use a compatible version for the frontend and signaling server |
+| npm | 10+ | Bundled with Node.js 22 |
 | Python | 3.11+ | Required for Nutshell Cashu mint |
 | Docker + Docker Compose | Docker 24+ | Runs the regtest Lightning stack |
 | coturn | any recent | `apt install coturn` (Linux) or `brew install coturn` (macOS) |
@@ -163,7 +176,7 @@ npm install
 npm run dev
 ```
 
-Open the app at [http://localhost:5173/](http://localhost:5173/). From the home page:
+Open the app at [https://localhost:5173/](https://localhost:5173/) (Vite uses a local self-signed certificate). From the home page:
 
 - Click **Start streaming** to become a tutor — you'll land on `/room.html` and can create a session
 - Click **Join a stream** (or paste a session ID/invite URL) to become a viewer
