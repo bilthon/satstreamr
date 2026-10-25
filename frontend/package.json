@@ -4,20 +4,24 @@
   "private": true,
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run --reporter=verbose"
   },
   "dependencies": {
     "@cashu/cashu-ts": "^2.9.0",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "vue": "^3.5.44"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
     "@types/qrcode": "^1.5.6",
     "@vitejs/plugin-basic-ssl": "^1.2.0",
+    "@vitejs/plugin-vue": "^5.2.4",
+    "jsdom": "^26.1.0",
     "typescript": "^5.4.5",
     "vite": "^5.2.0",
-    "vitest": "^3.0.9"
+    "vitest": "^3.0.9",
+    "vue-tsc": "^2.2.12"
   }
 }
