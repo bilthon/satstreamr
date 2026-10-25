@@ -76,8 +76,8 @@ export function useHome(wallet: HomeWallet, navigate: (url: string) => void, sea
   }
 
   function resetDeposit(): void {
-    // Abort stops observation/polling, not an invoice or monetary settlement
-    // already submitted by the wallet. Late results must not repopulate the view.
+    // Abort detaches this view; wallet polling/minting continues to completion
+    // or expiry. Clean UI timers and ignore late results without abandoning funds.
     depositController?.abort();
     depositController = undefined;
     cancelCelebration();

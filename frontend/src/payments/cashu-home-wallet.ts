@@ -20,24 +20,21 @@ function snapshot(): HomeWalletSnapshot {
   };
 }
 
-/** Same cadence, timeout and transient-error policy as deposit.pollForPayment,
- * but cancellable without changing that helper's existing room callers.
- * An in-flight read may finish; it cannot schedule more polls or mint after abort.
+/** Wallet-owned polling survives view cancellation, with the same cadence,
+ * timeout and transient-error policy as deposit.pollForPayment.
  */
-function waitForPayment(quote: string, signal: AbortSignal): Promise<'paid' | 'expired' | 'cancelled'> {
+function waitForPayment(quote: string): Promise<'paid' | 'expired'> {
   return new Promise(resolve => {
     let settled = false;
     let pollTimer: ReturnType<typeof setTimeout> | undefined;
     const timeout = setTimeout(() => finish('expired'), 600_000);
-    function finish(result: 'paid' | 'expired' | 'cancelled'): void {
+    function finish(result: 'paid' | 'expired'): void {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
       clearTimeout(pollTimer);
-      signal.removeEventListener('abort', cancel);
       resolve(result);
     }
-    function cancel(): void { finish('cancelled'); }
     async function poll(): Promise<void> {
       try {
         const { paid } = await checkMintQuote(quote);
@@ -46,9 +43,7 @@ function waitForPayment(quote: string, signal: AbortSignal): Promise<'paid' | 'e
       } catch { /* Preserve retry on transient network errors. */ }
       if (!settled) pollTimer = setTimeout(() => { void poll(); }, 3_000);
     }
-    signal.addEventListener('abort', cancel, { once: true });
-    if (signal.aborted) cancel();
-    else void poll();
+    void poll();
   });
 }
 
@@ -61,10 +56,9 @@ export const cashuHomeWallet: HomeWallet = {
     let quote;
     try { quote = await requestMintQuote(amount); }
     catch (error) { throw new Error(`Failed to generate invoice: ${message(error)}`); }
-    if (signal.aborted) return 'cancelled';
-    onInvoice(quote.invoice);
-    const result = await waitForPayment(quote.quote, signal);
-    if (signal.aborted) return 'cancelled';
+    // Once requested, the quote belongs to the wallet, not the view's lifetime.
+    if (!signal.aborted) onInvoice(quote.invoice);
+    const result = await waitForPayment(quote.quote);
     if (result !== 'paid') return result;
     // Do not abort monetary settlement once submitted. The UI ignores late results.
     try { await mintProofsFromQuote(quote.quote, amount); }
