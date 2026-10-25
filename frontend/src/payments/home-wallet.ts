@@ -23,7 +23,10 @@ export interface HomeWallet {
   snapshot(): HomeWalletSnapshot;
   subscribe(listener: (snapshot: HomeWalletSnapshot) => void): () => void;
   estimateWithdrawal(): Promise<WithdrawalEstimate>;
-  /** Cancellation stops observation/polling, not an already submitted mint operation. */
+  /** Abort suppresses invoice display, not wallet completion after quote submission.
+   * Polling continues to paid/expiry; paid quotes mint/credit even after view cleanup.
+   * Only a pre-aborted request is cancelled before submission.
+   */
   deposit(amount: number, onInvoice: (invoice: string) => void, signal: AbortSignal): Promise<'paid' | 'expired' | 'cancelled'>;
   /** Once submitted, withdrawal completes/rolls back independently of view lifetime. */
   withdraw(invoice: string, onProgress: (status: WalletStatus) => void): Promise<WalletStatus>;

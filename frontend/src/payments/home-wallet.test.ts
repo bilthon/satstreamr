@@ -57,27 +57,66 @@ describe('home Cashu application contract', () => {
       .rejects.toThrow(stage === 'quote' ? 'Failed to generate invoice: offline' : 'Deposit confirmed but minting failed: offline');
   });
 
-  it('cancels polling and never mints a late paid check', async () => {
+  it('credits a late paid check once after view cancellation and clears polling timers', async () => {
     vi.useFakeTimers();
+    vi.mocked(store.addProofs).mockImplementation(proofs => {
+      vi.mocked(store.getBalance).mockReturnValue(store.getBalance() + proofs.reduce((sum, p) => sum + p.amount, 0));
+    });
+    vi.mocked(deposit.mintProofsFromQuote).mockImplementation(async () => {
+      store.addProofs([proof]);
+      return [proof];
+    });
     let resolve!: (value: { paid: boolean }) => void;
     vi.mocked(deposit.checkMintQuote).mockReturnValue(new Promise(r => { resolve = r; }));
     const controller = new AbortController();
     const pending = cashuHomeWallet.deposit(16, vi.fn(), controller.signal);
     await vi.advanceTimersByTimeAsync(0);
     controller.abort();
-    await expect(pending).resolves.toBe('cancelled');
     resolve({ paid: true });
     await vi.advanceTimersByTimeAsync(600_000);
+    expect(deposit.mintProofsFromQuote).toHaveBeenCalledExactlyOnceWith('q', 16);
+    expect(store.addProofs).toHaveBeenCalledExactlyOnceWith([proof]);
+    expect(cashuHomeWallet.snapshot().balance).toBe(48);
+    await expect(pending).resolves.toBe('paid');
     expect(deposit.checkMintQuote).toHaveBeenCalledOnce();
-    expect(deposit.mintProofsFromQuote).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('retries transient polling failures and expires after ten minutes', async () => {
+  it('suppresses a late invoice but completes the quote requested before view cancellation', async () => {
+    vi.useFakeTimers();
+    let resolve!: (value: { quote: string; invoice: string }) => void;
+    vi.mocked(deposit.requestMintQuote).mockReturnValue(new Promise(r => { resolve = r; }));
+    vi.mocked(deposit.checkMintQuote).mockResolvedValueOnce({ paid: false });
+    const invoice = vi.fn();
+    const controller = new AbortController();
+    const pending = cashuHomeWallet.deposit(16, invoice, controller.signal);
+    controller.abort();
+    resolve({ quote: 'q', invoice: 'lnbc-test' });
+    await vi.advanceTimersByTimeAsync(3_000);
+    await expect(pending).resolves.toBe('paid');
+    expect(invoice).not.toHaveBeenCalled();
+    expect(deposit.checkMintQuote).toHaveBeenCalledTimes(2);
+    expect(deposit.mintProofsFromQuote).toHaveBeenCalledExactlyOnceWith('q', 16);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('does not submit a pre-aborted deposit', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(cashuHomeWallet.deposit(16, vi.fn(), controller.signal)).resolves.toBe('cancelled');
+    expect(deposit.requestMintQuote).not.toHaveBeenCalled();
+    expect(deposit.mintProofsFromQuote).not.toHaveBeenCalled();
+  });
+
+  it('retries transient polling failures after view cancellation and expires after ten minutes', async () => {
     vi.useFakeTimers();
     vi.mocked(deposit.checkMintQuote).mockRejectedValue(new Error('offline'));
-    const pending = cashuHomeWallet.deposit(16, vi.fn(), new AbortController().signal);
+    const controller = new AbortController();
+    const pending = cashuHomeWallet.deposit(16, vi.fn(), controller.signal);
+    await vi.advanceTimersByTimeAsync(0);
+    controller.abort();
     await vi.advanceTimersByTimeAsync(600_000);
+    expect(vi.mocked(deposit.checkMintQuote).mock.calls.length).toBeGreaterThan(1);
     await expect(pending).resolves.toBe('expired');
     expect(deposit.mintProofsFromQuote).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);

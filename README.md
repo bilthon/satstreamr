@@ -22,8 +22,10 @@ existing Cashu helpers and wallet store; bearer proofs never enter Vue state.
 The room page remains unchanged and `about.html` remains static. Home CSS stays
 global in `index.html`, with no added layout wrapper or client-side router.
 
-Closing/resetting the deposit view stops polling. It does not cancel a Lightning
-invoice or reverse an already submitted mint/withdrawal operation. Tests use
+Closing/resetting the deposit view cleans UI timers and suppresses late display
+updates. Wallet polling continues until paid/expiry, minting and crediting paid
+quotes even after view cleanup. This does not add recovery after page process death
+or reverse submitted withdrawals. Tests use
 mocked financial dependencies; run `cd frontend && npm test`. The frontend build
 runs `vue-tsc --noEmit && vite build`, including SFC type checking.
 

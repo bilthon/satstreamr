@@ -185,10 +185,12 @@ it('shows escaped deposit failures and allows retry', async () => {
   expect(control<HTMLButtonElement>('deposit-generate-btn').disabled).toBe(false);
 });
 
-it.each(['close', 'reset', 'escape', 'unmount'])('aborts deposit observation on %s and ignores late completion', async action => {
+it.each(['close', 'reset', 'escape', 'unmount'])('detaches deposit view on %s and ignores late invoice/completion', async action => {
   let signal!: AbortSignal;
+  let lateInvoice!: (invoice: string) => void;
   let finish!: (result: 'paid') => void;
-  vi.mocked(wallet.deposit).mockImplementation((_amount, _invoice, s) => {
+  vi.mocked(wallet.deposit).mockImplementation((_amount, invoice, s) => {
+    lateInvoice = invoice;
     signal = s; return new Promise(resolve => { finish = resolve; });
   });
   mount(); await click('deposit-btn'); await input('deposit-amount-input', '16'); await click('deposit-generate-btn');
@@ -196,8 +198,13 @@ it.each(['close', 'reset', 'escape', 'unmount'])('aborts deposit observation on 
   else if (action === 'escape') document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
   else await click(`deposit-${action}-btn`);
   expect(signal.aborted).toBe(true);
+  lateInvoice('lnbc-late');
   finish('paid'); await flush();
-  if (action !== 'unmount') expect(control('deposit-success-area').classList.contains('is-visible')).toBe(false);
+  if (action !== 'unmount') {
+    expect(control('deposit-success-area').classList.contains('is-visible')).toBe(false);
+    expect(control('deposit-invoice-text').textContent).toBe('');
+    expect(control('deposit-status').textContent).toBe('');
+  }
 });
 
 it.each(['success', 'error'] as const)('withdraws through the application contract and renders %s', async variant => {
