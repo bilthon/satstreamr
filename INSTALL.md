@@ -97,26 +97,40 @@ curl -i --no-buffer \
 
 ## 3. Configure nginx
 
-Obtain a TLS certificate:
+Obtain a TLS certificate that covers the apex and `www`. The `www` name has to be on the certificate or browsers fail TLS before nginx can redirect it.
 
 ```bash
 sudo apt install certbot python3-certbot-nginx
-sudo certbot certonly --nginx -d satstreamr.example.com
+sudo certbot certonly --nginx \
+  -d satstreamr.example.com -d www.satstreamr.example.com
 ```
 
-Create the site config:
+Create the site config. HTTP and `www` both redirect to the HTTPS apex. Replace `satstreamr.example.com` with the real domain (`satstreamr.com` on the live VPS — see [below](#live-site-satstreamrcom)).
 
 ```nginx
 # /etc/nginx/sites-available/satstreamr
 
 server {
     listen 80;
-    server_name satstreamr.example.com;
-    return 301 https://$host$request_uri;
+    listen [::]:80;
+    server_name satstreamr.example.com www.satstreamr.example.com;
+    return 301 https://satstreamr.example.com$request_uri;
 }
 
 server {
     listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name www.satstreamr.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/satstreamr.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/satstreamr.example.com/privkey.pem;
+
+    return 301 https://satstreamr.example.com$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
     server_name satstreamr.example.com;
 
     ssl_certificate     /etc/letsencrypt/live/satstreamr.example.com/fullchain.pem;
@@ -214,12 +228,76 @@ The frontend ICE configuration should include this TURN server. Update
 the peer connection setup in the frontend source if needed, or pass
 the TURN credentials via the signaling server.
 
+## Live site: satstreamr.com
+
+The public site is nginx on the VPS at `45.32.171.155` (`nginx/1.18.0` on Ubuntu). DNS is at Cloudflare (`noel.ns.cloudflare.com`, `raphaela.ns.cloudflare.com`) and the apex is DNS-only: the origin presents its own certificate (`CN=satstreamr.com`, SAN `DNS:satstreamr.com` only). There is no nginx config in this repo to deploy. `www` has to be fixed on Cloudflare and on that VPS.
+
+`www.satstreamr.com` is currently NXDOMAIN, so `https://www.satstreamr.com` never starts a TLS handshake. Adding the DNS record alone is not enough: the certificate does not list `www`, so HTTPS would then fail with a name mismatch until certbot is re-run.
+
+Do not replace the existing `/ws` or `/mint/` locations. Only add the `www` server and point port 80 at the apex.
+
+1. In Cloudflare DNS, add `www` as DNS only (grey cloud), matching the apex. Do not orange-cloud `www` while the apex stays DNS-only — that would terminate TLS at Cloudflare and can break the WebSocket upgrade on `/ws`.
+
+   | Type | Name | Target | Proxy |
+   |---|---|---|---|
+   | CNAME | `www` | `satstreamr.com` | DNS only |
+
+   An `A` record for `www` pointing at `45.32.171.155` is equivalent. There is no AAAA record today; add one for `www` only if you also add it for the apex.
+
+2. After `www.satstreamr.com` resolves to the VPS, expand the certificate:
+
+   ```bash
+   sudo certbot certonly --nginx --expand \
+     -d satstreamr.com -d www.satstreamr.com
+   ```
+
+3. Add this beside the existing apex `server` block (the one with `server_name satstreamr.com` that serves `/opt/satstreamr/frontend/dist`). Confirm the cert directory with `sudo certbot certificates` if it is not `satstreamr.com`.
+
+   ```nginx
+   server {
+       listen 80;
+       listen [::]:80;
+       server_name satstreamr.com www.satstreamr.com;
+       return 301 https://satstreamr.com$request_uri;
+   }
+
+   server {
+       listen 443 ssl http2;
+       listen [::]:443 ssl http2;
+       server_name www.satstreamr.com;
+
+       ssl_certificate     /etc/letsencrypt/live/satstreamr.com/fullchain.pem;
+       ssl_certificate_key /etc/letsencrypt/live/satstreamr.com/privkey.pem;
+
+       return 301 https://satstreamr.com$request_uri;
+   }
+   ```
+
+   If port 80 already has a `server` for `satstreamr.com`, add `www.satstreamr.com` to its `server_name` and change the redirect target from `$host` to `satstreamr.com` so HTTP `www` does not bounce to `https://www...`.
+
+4. Test and reload:
+
+   ```bash
+   sudo nginx -t && sudo systemctl reload nginx
+   curl -sI https://www.satstreamr.com/ | head
+   # expect: HTTP/2 301 and location: https://satstreamr.com/
+   ```
+
+5. After the frontend in this commit is built and deployed (`npm run build` into the nginx root), submit the site to Google Search Console:
+
+   - Add a Domain property for `satstreamr.com` (covers apex and `www`) or a URL-prefix property for `https://satstreamr.com/`.
+   - Verify with the DNS TXT record Google shows. Add that TXT at Cloudflare.
+   - Submit `https://satstreamr.com/sitemap.xml`.
+   - Inspect `https://satstreamr.com/` and `https://satstreamr.com/about.html` once the new build is live.
+
 ## Verify
 
 1. Open `https://satstreamr.example.com` in a browser
 2. Check the browser console — the signaling WebSocket should connect to `wss://satstreamr.example.com/ws`
 3. Deposit sats via Lightning, start a session as tutor, join from another device as viewer
 4. Confirm video streams and Cashu micropayments flow correctly
+5. `curl -sI https://www.satstreamr.example.com/` returns `301` to `https://satstreamr.example.com/`
+6. `https://satstreamr.example.com/robots.txt` links to `sitemap.xml`, and that sitemap lists `/` and `/about.html`
 
 ## Environment variables reference
 
