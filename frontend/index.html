@@ -3,27 +3,39 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Satstreamr</title>
+    <title>Satstreamr — Streaming Payments with Cashu and Lightning</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
+    <link rel="canonical" href="https://satstreamr.com/" />
     <meta name="theme-color" content="#10d9a0" />
-    <meta name="description" content="Satstreamr lets streamers earn Bitcoin (via Cashu) per minute while streaming video. No Lightning routing — just bearer tokens sent over a WebRTC data channel." />
+    <meta name="description" content="Pay-per-minute video streaming paid with Cashu ecash. Tokens move over WebRTC; Lightning is only used to deposit and cash out." />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Satstreamr" />
-    <meta property="og:description" content="Earn sats per minute streaming video. Cashu tokens flow directly over WebRTC — no routing, no accounts." />
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="Satstreamr" />
-    <meta name="twitter:description" content="Earn sats per minute streaming video. Cashu tokens flow directly over WebRTC — no routing, no accounts." />
+    <meta property="og:site_name" content="Satstreamr" />
+    <meta property="og:title" content="Satstreamr — Streaming Payments with Cashu and Lightning" />
+    <meta property="og:description" content="Pay-per-minute video streaming paid with Cashu ecash. Tokens move over WebRTC; Lightning is only used to deposit and cash out." />
+    <meta property="og:url" content="https://satstreamr.com/" />
+    <meta property="og:image" content="https://satstreamr.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Satstreamr — streaming payments with Cashu and Lightning" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Satstreamr — Streaming Payments with Cashu and Lightning" />
+    <meta name="twitter:description" content="Pay-per-minute video streaming paid with Cashu ecash. Tokens move over WebRTC; Lightning is only used to deposit and cash out." />
+    <meta name="twitter:image" content="https://satstreamr.com/og-image.png" />
+    <meta name="twitter:image:alt" content="Satstreamr — streaming payments with Cashu and Lightning" />
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "SoftwareApplication",
+      "@type": "WebApplication",
       "name": "Satstreamr",
+      "url": "https://satstreamr.com/",
+      "image": "https://satstreamr.com/og-image.png",
       "applicationCategory": "MultimediaApplication",
       "operatingSystem": "Web",
-      "description": "Peer-to-peer video streaming with per-minute Cashu micropayments over a WebRTC data channel. Self-hostable on Umbrel.",
+      "browserRequirements": "Requires a browser with WebRTC support.",
+      "description": "Peer-to-peer video streaming with per-minute Cashu micropayments over a WebRTC data channel. Lightning is used to deposit and withdraw.",
       "featureList": [
         "WebRTC video streaming",
         "Cashu ecash micropayments",
