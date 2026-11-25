@@ -545,13 +545,16 @@ function setupPeerHandlers(): void {
 
       scheduler = new PaymentScheduler(
         dataChannel,
-        spendProofs,
-        (proofs, url) =>
-          getEncodedToken({ mint: url, proofs, unit: 'sat' }),
+        {
+          getBalance,
+          preparePayment: (amountSats) => {
+            const proofs = spendProofs(amountSats);
+            return getEncodedToken({ mint: mintUrl, proofs, unit: 'sat' });
+          },
+        },
         {
           intervalSecs: activeIntervalSeconds,
           chunkSats: activeRateSatsPerInterval,
-          mintUrl,
           initialChunkId,
           initialTotalSatsPaid,
           onStateChange: (state) => {
