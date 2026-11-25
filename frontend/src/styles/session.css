@@ -1112,6 +1112,13 @@ html {
   transform: translateX(0);
 }
 
+/* Vue owns room toast insertion/removal; retain the existing slide/fade. */
+.room-toast-enter-from,
+.room-toast-leave-to {
+  opacity: 0;
+  transform: translateX(24px);
+}
+
 .toast-warning {
   background: rgba(240, 196, 25, 0.12);
   border: 1px solid rgba(240, 196, 25, 0.35);
