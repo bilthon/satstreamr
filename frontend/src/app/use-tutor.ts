@@ -10,6 +10,7 @@ export function useTutor(room: RoomContext): RoomActions {
   const { state, services, ui } = room;
   const client = services.createClient();
   let peer = services.createPeer();
+  let iceServers: RTCIceServer[] | undefined;
   let localStream: MediaStream | null = null;
   let dataChannel: DataChannel | null = null;
   let signalingReady = false;
@@ -191,6 +192,7 @@ export function useTutor(room: RoomContext): RoomActions {
     peer.close();
     peer = services.createPeer();
     setupPeer();
+    if (iceServers) peer.useIceServers(iceServers);
     receiver.reset();
     dataChannel = null;
 
@@ -326,9 +328,11 @@ export function useTutor(room: RoomContext): RoomActions {
     if (!active()) return;
     switch (message.type) {
       case 'session_created':
+        if (message.iceServers && message.iceServers.length > 0) iceServers = message.iceServers;
         sessionCreated(message.sessionId);
         break;
       case 'viewer_joined':
+        if (message.iceServers && message.iceServers.length > 0) iceServers = message.iceServers;
         void viewerJoined();
         break;
       case 'answer':

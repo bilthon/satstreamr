@@ -75,6 +75,7 @@ export function useViewer(room: RoomContext): RoomActions {
     showConfirm(invitedRate, invitedInterval, invitedMint);
   }
   let peer = services.createPeer();
+  let tutorOfferArrived = false;
   const client = services.createClient();
 
   function stopCountdown(): void {
@@ -253,9 +254,6 @@ export function useViewer(room: RoomContext): RoomActions {
       return;
     }
     ui.setStatus('offer received -- creating answer…');
-    peer.close();
-    peer = services.createPeer();
-    setupPeer();
     stopCountdown();
     state.lowFunds = 'normal';
     releaseChannel();
@@ -325,6 +323,7 @@ export function useViewer(room: RoomContext): RoomActions {
     if (!active()) return;
     switch (message.type) {
       case 'session_created':
+        if (message.iceServers && message.iceServers.length > 0) peer.useIceServers(message.iceServers);
         try {
           services.validateMint(message.mintUrl);
         } catch (error) {
@@ -344,13 +343,14 @@ export function useViewer(room: RoomContext): RoomActions {
           // Once preparation starts, its own wallet rollback/completion remains
           // independent of this view. Only late status/error display is suppressed.
           void payments.prepare(rate).then(() => {
-            if (active()) ui.setStatus('wallet ready — waiting for tutor…');
+            if (active() && !tutorOfferArrived) ui.setStatus('wallet ready — waiting for tutor…');
           }).catch(error => {
             if (active()) ui.showError(`Pre-split failed: ${error instanceof Error ? error.message : String(error)}`);
           });
         });
         break;
       case 'offer':
+        tutorOfferArrived = true;
         void handleOffer(message.sdp as RTCSessionDescriptionInit);
         break;
       case 'ice_candidate':
