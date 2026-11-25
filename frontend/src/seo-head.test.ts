@@ -43,6 +43,9 @@ describe('page metadata', () => {
   const home = read('index.html')
   const about = read('about.html')
   const room = read('room.html')
+  // The visible page headings are rendered by the Vue apps mounted in each page.
+  const homeApp = read('src/app/HomeApp.vue')
+  const roomApp = read('src/app/RoomApp.vue')
 
   it('gives the homepage a descriptive title, description, canonical, and h1', () => {
     expect(home).toMatch(
@@ -50,7 +53,7 @@ describe('page metadata', () => {
     )
     expect(home).toContain('name="description"')
     expect(home).toContain('<link rel="canonical" href="https://satstreamr.com/" />')
-    expect(home).toContain('<h1>Satstreamr</h1>')
+    expect(homeApp).toContain('<h1>Satstreamr</h1>')
   })
 
   it('gives the about page a descriptive title, description, canonical, and h1', () => {
@@ -83,7 +86,7 @@ describe('page metadata', () => {
   it('keeps the session room out of the index and gives it a canonical URL', () => {
     expect(room).toContain('name="robots" content="noindex"')
     expect(room).toContain('<link rel="canonical" href="https://satstreamr.com/room.html" />')
-    expect(room).toContain('<h1>Satstreamr — Room</h1>')
+    expect(roomApp).toContain('<h1>Satstreamr — Room</h1>')
     expect(room).toContain('name="description"')
   })
 })
