@@ -1,4 +1,4 @@
-import { PeerConnection } from './peer-connection.js';
+import type { PeerConnection } from './peer-connection.js';
 import { SignalingClient } from '../signaling-client.js';
 
 /**
@@ -29,13 +29,4 @@ export function wireSharedPeerHandlers(
       remoteVideoEl.srcObject = event.streams[0];
     }
   };
-}
-
-/**
- * Tears down the current peer and creates a fresh one.
- * Returns the new PeerConnection.
- */
-export function recreatePeer(currentPeer: PeerConnection): PeerConnection {
-  currentPeer.close();
-  return new PeerConnection();
 }

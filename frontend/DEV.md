@@ -9,7 +9,7 @@ can perform the Gate 2 WebRTC peer-connection test.
 
 | Requirement | Notes |
 |---|---|
-| Node.js 18+ | `node --version` to confirm |
+| Node.js 22.4.0+ | `node --version` to confirm (required by the Cashu SDK) |
 | npm | bundled with Node |
 | git | to clone repos |
 | Chrome or Firefox | WebRTC support required |
@@ -53,7 +53,6 @@ Open a second terminal:
 ```bash
 git clone https://github.com/bilthon/satstreamr
 cd satstreamr/frontend
-cp .env.example .env   # already configured for localhost
 npm install
 npm run dev
 ```
@@ -62,16 +61,18 @@ Expected output:
 
 ```
   VITE v5.x.x  ready in ...ms
-  ➜  Local:   http://localhost:5173/
+  ➜  Local:   https://localhost:5173/
 ```
 
-The `.env.example` ships with sensible localhost defaults — no changes needed
-for a local Gate 2 test:
+The dev server uses a self-signed HTTPS certificate (accept the browser
+warning once). A `.env` file is optional: without one, the frontend reaches the
+signaling server and the mint through Vite's same-origin dev proxies. See
+`.env.example` for the available overrides.
 
-```
-VITE_SIGNALING_URL=ws://localhost:8080
-VITE_MINT_URL=http://localhost:3338
-```
+The UI is built with Vue 3: `index.html` mounts the home app
+(`src/pages/home.ts`) and `room.html` mounts the session room
+(`src/pages/room.ts`) for both roles. `tutor.html` and `viewer.html` are dev-only
+redirect stubs to `room.html`.
 
 ---
 
@@ -85,14 +86,15 @@ connection through the signaling server, each with bidirectional audio/video.
 1. Confirm the signaling server is running and its stdout shows the
    `server_start` log line.
 
-2. Open `http://localhost:5173/tutor.html` in a browser tab.
+2. Open `https://localhost:5173/room.html` in a browser tab (tutor role).
 
 3. Grant the camera and microphone permission when prompted.
 
-4. The page status line progresses:
-   - `connecting...`
-   - `connected — creating session…`
-   - `session created — waiting for viewer…`
+4. Configure the rate and click **Start Session**. The page status line
+   progresses:
+   - `connected -- configure rate and click Start Session`
+   - `connected -- creating session…`
+   - `session created -- waiting for viewer…`
 
    A session ID (UUID) appears in the blue box below the status, labelled
    **"Share this session ID with your viewer"**. The page also generates a
@@ -100,12 +102,13 @@ connection through the signaling server, each with bidirectional audio/video.
 
 5. Copy the full viewer link shown on the tutor page, or manually construct:
    ```
-   http://localhost:5173/viewer.html?session=<session-id>
+   https://localhost:5173/room.html?session=<session-id>
    ```
 
 6. Open that URL in a second browser tab (or window).
 
-7. Grant camera and microphone permission on the viewer tab.
+7. Confirm the session terms on the viewer tab, then grant camera and
+   microphone permission.
 
 8. Open **DevTools (F12) → Console** in both tabs.
 
@@ -149,7 +152,7 @@ prompt so no manual click is required.
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | Status stays `connecting...` | Signaling server not running | Start `node dist/server.js` on port 8080 |
-| `[signaling] error` in console | Wrong `VITE_SIGNALING_URL` | Check `.env` — must be `ws://localhost:8080` |
+| `[signaling] error` in console | Wrong `VITE_SIGNALING_URL` override | Remove the override to use the dev proxy, or point it at the running server |
 | Red error box: "No session ID found in URL" | Viewer opened without `?session=` | Use the full viewer link from the tutor page |
 | Red error box: `SESSION_NOT_FOUND` | Session ID mismatch or tutor tab closed/reloaded | Reload tutor tab, wait for new session ID, copy fresh link |
 | Red error box: `SESSION_FULL` | A second viewer tried to join | The signaling server allows only one viewer per session |
