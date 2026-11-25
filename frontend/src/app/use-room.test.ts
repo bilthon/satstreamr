@@ -59,7 +59,7 @@ afterEach(() => {
 
 it('characterizes tutor rate consent, fees and the default create-session message', async () => {
   window.history.replaceState({}, '', '/room.html');
-  await import('../pages/tutor.js');
+  await import('../pages/room.js');
   mock.connect();
   await flush();
   expect(el('status').textContent).toBe('connected -- configure rate and click Start Session');
@@ -76,7 +76,7 @@ it('characterizes tutor rate consent, fees and the default create-session messag
 
 it('characterizes viewer manual join without media or preparation before consent', async () => {
   window.history.replaceState({}, '', '/room.html?session=demo');
-  await import('../pages/viewer.js');
+  await import('../pages/room.js');
   mock.connect();
   mock.message({ type: 'session_created', sessionId: 'demo', mintUrl: 'https://mint.test', rateSatsPerInterval: 2, intervalSeconds: 10 });
   await flush();

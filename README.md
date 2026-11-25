@@ -244,7 +244,7 @@ cd frontend
 npm test
 ```
 
-Uses Vitest. Covers the Cashu wallet module and data channel helpers.
+Uses Vitest with jsdom. Covers the Vue home and room apps and their composables (session lifecycle, reconnection, summaries, cash-out), the payment interfaces and Cashu adapters, the payment scheduler, and the wallet, deposit and data channel helpers. Network, mint and WebRTC boundaries are mocked; browser media and live payments need a manual check.
 
 ---
 
