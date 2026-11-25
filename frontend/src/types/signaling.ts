@@ -79,17 +79,25 @@ export type InboundMessage =
 
 // --- Outbound messages (server -> client) ---
 
+export interface SignalingIceServer {
+  urls: string | string[];
+  username?: string;
+  credential?: string;
+}
+
 export interface SessionCreatedMessage {
   type: 'session_created';
   sessionId: string;
   mintUrl: string;
   rateSatsPerInterval?: number;
   intervalSeconds?: number;
+  iceServers?: SignalingIceServer[];
 }
 
 export interface ViewerJoinedMessage {
   type: 'viewer_joined';
   viewerId: string;
+  iceServers?: SignalingIceServer[];
 }
 
 export interface SessionRejoinedMessage {

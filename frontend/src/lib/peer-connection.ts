@@ -4,7 +4,7 @@
  * Design goals:
  * - Typed event callbacks: onTrack, onIceStateChange, onDataChannel
  * - Trickle ICE with candidate buffering until setRemoteDescription completes
- * - STUN-only ICE config (TURN added in Unit 13)
+ * - STUN by default, replaced with the session ICE servers before negotiation
  * - Raw RTCPeerConnection exposed via getPeerConnection() for Unit 07 data channel
  * - getUserMedia errors surfaced as human-readable strings, not raw DOMException
  */
@@ -45,6 +45,16 @@ export class PeerConnection {
       console.log('[peer] ondatachannel', event.channel.label);
       this.onDataChannel?.(event);
     };
+
+    this.pc.onicecandidateerror = (event) => {
+      console.warn('[peer] ICE candidate error', event.errorCode, event.errorText, event.url);
+    };
+  }
+
+  /** Install signaling-provided STUN/TURN servers before createOffer or handleOffer. */
+  useIceServers(servers: RTCIceServer[]): void {
+    this.pc.setConfiguration({ iceServers: servers });
+    console.log('[peer] ICE servers', servers.map(server => server.urls));
   }
 
   /**

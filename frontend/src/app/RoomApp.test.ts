@@ -15,7 +15,7 @@ let app: App | undefined;
 let root: HTMLDivElement;
 const flush = async (): Promise<void> => { for (let i = 0; i < 12; i++) await nextTick(); };
 
-function harness(search = '', balance = 20) {
+function harness(search = '', balance = 20, options?: { distinctPeers?: boolean }) {
   let connected = () => {};
   let disconnecting = () => {};
   let disconnected = () => {};
@@ -50,25 +50,48 @@ function harness(search = '', balance = 20) {
     onReconnected: (fn: () => void) => { reconnected = fn; },
     setSessionId: vi.fn(), send, disconnect: vi.fn(),
   };
-  const peer = {
-    onIceCandidate: vi.fn(),
-    onTrack: null as PeerConnection['onTrack'],
-    onIceStateChange: null as PeerConnection['onIceStateChange'],
-    onDataChannel: null as PeerConnection['onDataChannel'],
-    initMedia: vi.fn().mockResolvedValue(stream), close: vi.fn(), createPaymentChannel: vi.fn(),
-    createOffer: vi.fn().mockResolvedValue({ type: 'offer', sdp: 'fake' }),
-    handleOffer: vi.fn().mockResolvedValue({ type: 'answer', sdp: 'fake' }),
-    handleAnswer: vi.fn(), addIceCandidate: vi.fn(),
-  };
+  const peers: Array<{
+    onIceCandidate: ReturnType<typeof vi.fn>;
+    onTrack: PeerConnection['onTrack'];
+    onIceStateChange: PeerConnection['onIceStateChange'];
+    onDataChannel: PeerConnection['onDataChannel'];
+    initMedia: ReturnType<typeof vi.fn>;
+    close: ReturnType<typeof vi.fn>;
+    createPaymentChannel: ReturnType<typeof vi.fn>;
+    createOffer: ReturnType<typeof vi.fn>;
+    handleOffer: ReturnType<typeof vi.fn>;
+    handleAnswer: ReturnType<typeof vi.fn>;
+    addIceCandidate: ReturnType<typeof vi.fn>;
+    useIceServers: ReturnType<typeof vi.fn>;
+  }> = [];
+  function makePeer() {
+    const created = {
+      onIceCandidate: vi.fn(),
+      onTrack: null as PeerConnection['onTrack'],
+      onIceStateChange: null as PeerConnection['onIceStateChange'],
+      onDataChannel: null as PeerConnection['onDataChannel'],
+      initMedia: vi.fn().mockResolvedValue(stream), close: vi.fn(), createPaymentChannel: vi.fn(),
+      createOffer: vi.fn().mockResolvedValue({ type: 'offer', sdp: 'fake' }),
+      handleOffer: vi.fn().mockResolvedValue({ type: 'answer', sdp: 'fake' }),
+      handleAnswer: vi.fn(), addIceCandidate: vi.fn(), useIceServers: vi.fn(),
+    };
+    peers.push(created);
+    return created;
+  }
+  let peer = options?.distinctPeers ? undefined : makePeer();
   const services: RoomServices = {
     createClient: () => client as unknown as SignalingClient,
-    createPeer: () => peer as unknown as PeerConnection,
+    createPeer: () => {
+      if (!options?.distinctPeers) return peer as unknown as PeerConnection;
+      peer = makePeer();
+      return peer as unknown as PeerConnection;
+    },
     createChannel: vi.fn().mockReturnValue(channel),
     wallet: { createCashOut: vi.fn().mockReturnValue(cashOut), estimateReceiptFee: vi.fn().mockResolvedValue(1) },
     sender: {
       getBalance: () => balance,
       onBalanceChange: vi.fn(fn => { balanceChanged = fn; return unsubscribe; }),
-      prepare: vi.fn().mockResolvedValue(10),
+      prepare: vi.fn<(amount: number) => Promise<number>>().mockResolvedValue(10),
       createSession: vi.fn((_transport, options) => { sessionOptions = options; return scheduler; }),
     },
     createReceiver: vi.fn(callbacks => { receipt = callbacks; return receiver; }),
@@ -79,8 +102,10 @@ function harness(search = '', balance = 20) {
   document.body.append(root);
   app = createApp(RoomApp, { services, search });
   app.mount(root);
+  if (peer === undefined) throw new Error('peer was not created');
+  const roomPeer = peer;
   return {
-    services, client, peer, send, stream, stopTrack, scheduler, unsubscribe, receiver, cashOut, quote, channel,
+    services, client, peer: roomPeer, peers, send, stream, stopTrack, scheduler, unsubscribe, receiver, cashOut, quote, channel,
     receipt: () => receipt,
     connect: () => connected(),
     disconnecting: () => disconnecting(),
@@ -96,7 +121,7 @@ function harness(search = '', balance = 20) {
     persist: (chunkId: number, totalSatsPaid: number) => sessionOptions.onStateChange?.({ chunkId, totalSatsPaid }),
     openChannel() {
       const raw = { onopen: null, onclose: null } as unknown as RTCDataChannel;
-      peer.onDataChannel?.({ channel: raw } as RTCDataChannelEvent);
+      roomPeer.onDataChannel?.({ channel: raw } as RTCDataChannelEvent);
       raw.onopen?.call(raw, new Event('open'));
       return raw;
     },
@@ -431,4 +456,69 @@ it('does not abandon cash-out settlement when the room unmounts during quote loo
   resolve(h.quote); await flush();
   expect(h.quote.pay).toHaveBeenCalledOnce();
   expect(root.children.length).toBe(0);
+});
+
+const turnServers = [{ urls: 'turn:turn.example.com:3478', username: 'u', credential: 'c' }];
+const remoteSrflx = {
+  candidate: 'candidate:1 1 udp 2122260223 203.0.113.5 50000 typ srflx',
+  sdpMid: '0',
+  sdpMLineIndex: 0,
+};
+
+it('answers with remote candidates that arrived before local media was ready', async () => {
+  vi.useFakeTimers();
+  const h = harness('?session=demo', 20, { distinctPeers: true });
+  let resolveMedia!: (stream: MediaStream) => void;
+  h.peers[0]!.initMedia.mockReturnValue(new Promise(resolve => { resolveMedia = resolve; }));
+  h.connect();
+  h.message(created);
+  await flush();
+  await click('join-confirm-accept');
+  h.message({ type: 'offer', sessionId: 'demo', sdp: { type: 'offer', sdp: 'fake' } });
+  h.message({ type: 'ice_candidate', candidate: remoteSrflx, fromPeerId: 'tutor' });
+  resolveMedia(h.stream);
+  await vi.advanceTimersByTimeAsync(100);
+  await flush();
+  const answering = h.peers.find(item => item.handleOffer.mock.calls.length > 0);
+  expect(answering?.addIceCandidate).toHaveBeenCalledWith(remoteSrflx);
+});
+
+it('gives the negotiated peer the TURN servers from signaling', async () => {
+  const viewer = harness('?session=demo', 20, { distinctPeers: true });
+  viewer.connect();
+  viewer.message({ ...created, iceServers: turnServers } as SignalingMessage);
+  await flush();
+  await click('join-confirm-accept');
+  viewer.message({ type: 'offer', sessionId: 'demo', sdp: { type: 'offer', sdp: 'fake' } });
+  await flush();
+  const answering = viewer.peers.find(item => item.handleOffer.mock.calls.length > 0);
+  expect(answering?.useIceServers).toHaveBeenCalledWith(turnServers);
+  app?.unmount();
+  root.remove();
+
+  const tutor = harness('', 20, { distinctPeers: true });
+  tutor.connect();
+  await click('start-session-btn');
+  tutor.message({ ...created, iceServers: turnServers } as SignalingMessage);
+  await flush();
+  tutor.message({ type: 'viewer_joined', viewerId: 'viewer', iceServers: turnServers } as SignalingMessage);
+  await flush();
+  const offering = tutor.peers.find(item => item.createOffer.mock.calls.length > 0);
+  expect(offering?.useIceServers).toHaveBeenCalledWith(turnServers);
+});
+
+it('keeps the answer status when wallet preparation finishes afterwards', async () => {
+  const h = harness('?session=demo');
+  let resolvePrepare!: (value: number) => void;
+  vi.mocked(h.services.sender.prepare).mockReturnValue(new Promise(resolve => { resolvePrepare = resolve; }));
+  h.connect();
+  h.message(created);
+  await flush();
+  await click('join-confirm-accept');
+  h.message({ type: 'offer', sessionId: 'demo', sdp: { type: 'offer', sdp: 'fake' } });
+  await flush();
+  expect(el('status').textContent).toBe('answer sent -- waiting for ICE…');
+  resolvePrepare(10);
+  await flush();
+  expect(el('status').textContent).toBe('answer sent -- waiting for ICE…');
 });
