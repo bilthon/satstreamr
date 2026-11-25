@@ -19,8 +19,18 @@ The home page uses Vue 3 + TypeScript (`frontend/src/app/HomeApp.vue`). Its
 and Cashu denomination summaries go through the `HomeWallet` application
 interface and concrete `cashu-home-wallet.ts` adapter. The adapter reuses the
 existing Cashu helpers and wallet store; bearer proofs never enter Vue state.
-The room page remains unchanged and `about.html` remains static. Home CSS stays
-global in `index.html`, with no added layout wrapper or client-side router.
+The room uses `RoomApp.vue` with shared `use-room.ts` presentation/lifecycle and
+role-specific `use-tutor.ts` / `use-viewer.ts` orchestration. `pages/room.ts`
+constructs the existing session payment and transport implementations. The
+`?session` query selects the viewer; its absence selects the tutor. Both video
+nodes stay mounted across status/overlay updates so their `srcObject` is stable.
+View disposal stops media, scheduling, subscriptions and UI timers, but does not
+cancel already-submitted wallet preparation, receipt credit or cash-out. As before,
+room funding is tutor cash-out; deposits remain on home. Existing session cash-out
+accounting and protocol limitations are unchanged.
+
+`about.html` remains static. Home CSS stays global in `index.html`; room CSS stays
+in `session.css`. Neither page adds a layout wrapper or client-side router.
 
 Closing/resetting the deposit view cleans UI timers and suppresses late display
 updates. Wallet polling continues until paid/expiry, minting and crediting paid
