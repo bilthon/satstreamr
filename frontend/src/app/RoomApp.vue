@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useRoom, type RoomServices } from './use-room.js';
+import { formatElapsed, useRoom, type RoomServices } from './use-room.js';
 
 const props = defineProps<{
   services: RoomServices;
@@ -101,6 +101,15 @@ const {
     <div>
       <span class="stat-label">Est. duration</span>
       <span id="est-duration-display">{{ r.duration }}</span>
+    </div>
+    <div v-if="r.freePreview && r.freeRemaining > 0" id="free-preview" role="progressbar" aria-valuemin="0" :aria-valuenow="r.freeRemaining" :aria-valuemax="r.freePreview.totalSecs" aria-label="Free time left">
+      <div class="free-preview-head">
+        <span class="stat-label">Free time</span>
+        <span id="free-preview-remaining">{{ formatElapsed(r.freeRemaining) }}</span>
+      </div>
+      <div class="free-preview-track">
+        <div id="free-preview-fill" :class="{ warn: r.freeRemaining <= 10 }" :style="{ width: `${r.freeRemaining / r.freePreview.totalSecs * 100}%` }"></div>
+      </div>
     </div>
   </div>
 

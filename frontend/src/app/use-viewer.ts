@@ -183,9 +183,12 @@ export function useViewer(room: RoomContext): RoomActions {
           if (typeof saved?.freeEndsAt === 'number') {
             const remaining = Math.ceil((saved.freeEndsAt - Date.now()) / 1000);
             initialDelaySecs = remaining > 0 ? remaining : interval;
+            if (remaining > 0) room.showFreePreview(saved.freeEndsAt, Math.max(freeSeconds, remaining));
           } else if (freeSeconds > 0) {
-            updateSession({ freeEndsAt: Date.now() + freeSeconds * 1000 });
+            const freeEndsAt = Date.now() + freeSeconds * 1000;
+            updateSession({ freeEndsAt });
             initialDelaySecs = freeSeconds;
+            room.showFreePreview(freeEndsAt, freeSeconds);
           }
         }
         totalSats = initialTotalSatsPaid;
@@ -313,6 +316,7 @@ export function useViewer(room: RoomContext): RoomActions {
         role: 'viewer',
         chunkCount: same ? existing.chunkCount ?? 0 : 0,
         totalSatsPaid: same ? existing.totalSatsPaid ?? 0 : 0,
+        ...(same && typeof existing.freeEndsAt === 'number' ? { freeEndsAt: existing.freeEndsAt } : {}),
       });
       ui.setStatus('joining session…');
       void startMedia();

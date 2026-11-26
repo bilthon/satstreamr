@@ -181,6 +181,58 @@ it('delays the first charge by the free preview on the session', async () => {
   }));
 });
 
+it('shows the free preview draining until the first charge', async () => {
+  vi.useFakeTimers();
+  const h = harness('?session=demo');
+  h.connect();
+  h.message({ ...created, freeSeconds: 45 });
+  await flush();
+  await click('join-confirm-accept');
+  h.openChannel();
+  await flush();
+  expect(el('free-preview').getAttribute('aria-valuenow')).toBe('45');
+  expect(el('free-preview').getAttribute('aria-valuemax')).toBe('45');
+  expect(el('free-preview-remaining').textContent).toBe('00:45');
+  expect(el('free-preview-fill').style.width).toBe('100%');
+  await vi.advanceTimersByTimeAsync(15_000);
+  await flush();
+  expect(el('free-preview').getAttribute('aria-valuenow')).toBe('30');
+  expect(el('free-preview-remaining').textContent).toBe('00:30');
+  expect(el('free-preview-fill').style.width).toBe(`${30 / 45 * 100}%`);
+  await vi.advanceTimersByTimeAsync(30_000);
+  await flush();
+  expect(root.querySelector('#free-preview')).toBeNull();
+});
+
+it('shows no free preview when the session offers none', async () => {
+  const h = harness('?session=demo');
+  h.connect();
+  h.message(created);
+  await flush();
+  await click('join-confirm-accept');
+  h.openChannel();
+  await flush();
+  expect(el('viewer-stats').style.display).toBe('flex');
+  expect(root.querySelector('#free-preview')).toBeNull();
+});
+
+it('resumes the free preview from the saved deadline after a refresh', async () => {
+  vi.useFakeTimers();
+  saveSession({ sessionId: 'demo', peerId: '', role: 'viewer', chunkCount: 0, totalSatsPaid: 0, freeEndsAt: Date.now() + 20_000 });
+  const h = harness('?session=demo');
+  h.connect();
+  h.message({ ...created, freeSeconds: 45 });
+  await flush();
+  await click('join-confirm-accept');
+  h.openChannel();
+  await flush();
+  expect(el('free-preview').getAttribute('aria-valuenow')).toBe('20');
+  expect(el('free-preview').getAttribute('aria-valuemax')).toBe('45');
+  expect(el('free-preview-remaining').textContent).toBe('00:20');
+  expect(el('free-preview-fill').style.width).toBe(`${20 / 45 * 100}%`);
+  expect(h.services.sender.createSession).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ initialDelaySecs: 20 }));
+});
+
 it('keeps both video nodes and srcObject stable through rate, ceremony, receipt and summary updates', async () => {
   vi.useFakeTimers();
   const h = harness();
