@@ -103,6 +103,40 @@ html {
   font-variant-numeric: tabular-nums;
 }
 
+#free-preview {
+  flex-basis: 100%;
+}
+
+#free-preview .free-preview-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+#free-preview-remaining {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+}
+
+#free-preview .free-preview-track {
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--glass-border);
+  overflow: hidden;
+}
+
+#free-preview-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--color-pulse);
+  transition: width 1s linear, background-color var(--duration-fast) ease;
+}
+
+#free-preview-fill.warn {
+  background: var(--color-warning);
+}
+
 /* Larger display for remaining budget on viewer side */
 #budget-display {
   font-size: var(--text-4xl);

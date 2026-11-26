@@ -54,6 +54,8 @@ function createState(search: string) {
     duration: '—',
     chunkPulse: false,
     chunkAnimation: 0,
+    freePreview: null as { endsAt: number; totalSecs: number } | null,
+    freeRemaining: 0,
     exitVisible: false,
     paused: false,
     lowFunds: 'normal' as 'normal' | 'warning' | 'countdown',
@@ -110,6 +112,7 @@ export interface RoomContext {
   startTimer(): void;
   elapsedSeconds(): number;
   showStats(initialBudget?: number): void;
+  showFreePreview(endsAt: number, totalSecs: number): void;
   showSummary(sats: number, chunks: number): void;
   getRate(): { rateSatsPerInterval: number; intervalSeconds: number; freeSeconds: number };
 }
@@ -127,6 +130,7 @@ export function useRoom(services: RoomServices, search: string) {
   let sessionStart: number | null = null;
   const cleanups: (() => void)[] = [];
   const timers = new Set<ReturnType<typeof setTimeout>>();
+  let previewTimer: ReturnType<typeof setInterval> | undefined;
   let actions: RoomActions | undefined;
 
   const ui: SessionUI = {
@@ -182,6 +186,17 @@ export function useRoom(services: RoomServices, search: string) {
       if (initialBudget !== undefined && sessionStart === null) sessionStart = Date.now();
       state.statsVisible = true;
     },
+    showFreePreview(endsAt, totalSecs) {
+      stopFreePreview();
+      if (!alive || totalSecs <= 0 || endsAt <= Date.now()) return;
+      const tick = (): void => {
+        state.freeRemaining = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+        if (state.freeRemaining === 0) stopFreePreview();
+      };
+      state.freePreview = { endsAt, totalSecs };
+      tick();
+      previewTimer = setInterval(tick, 1000);
+    },
     showSummary(sats, chunks) {
       if (!alive || state.summaryVisible) return;
       const elapsed = context.elapsedSeconds();
@@ -209,6 +224,13 @@ export function useRoom(services: RoomServices, search: string) {
       };
     },
   };
+
+  function stopFreePreview(): void {
+    clearInterval(previewTimer);
+    previewTimer = undefined;
+    state.freePreview = null;
+    state.freeRemaining = 0;
+  }
 
   const effectiveRate = computed(() => {
     const rate = context.getRate();
@@ -247,6 +269,7 @@ export function useRoom(services: RoomServices, search: string) {
     alive = false;
     for (const cleanup of cleanups) cleanup();
     for (const timer of timers) clearTimeout(timer);
+    clearInterval(previewTimer);
     // Disposal stops scheduling/media, never rolls back submitted financial work.
   });
 
