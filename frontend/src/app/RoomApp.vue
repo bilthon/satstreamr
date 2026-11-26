@@ -45,6 +45,10 @@ const {
           Interval (seconds)
           <input type="number" id="rate-interval-input" v-model="r.rateInterval" min="5" class="rate-config-input" />
         </label>
+        <label class="rate-config-label">
+          Free at the start (seconds)
+          <input type="number" id="free-seconds-input" v-model="r.freeSeconds" min="0" class="rate-config-input" />
+        </label>
       </div>
       <div class="rate-derived-group">
         <div class="effective-rate">
@@ -118,6 +122,7 @@ const {
   <div id="join-confirm-overlay" :class="{ hidden: !r.joinVisible }" role="alertdialog" aria-modal="true" aria-labelledby="join-confirm-title">
     <div class="join-confirm-card">
       <h2 id="join-confirm-title">Confirm Join</h2>
+      <p id="join-confirm-free" class="join-confirm-intro" v-show="r.joinFreeSeconds > 0">Free for {{ r.joinFreeSeconds }}s, then the rate below.</p>
       <p class="join-confirm-intro">The streamer is charging:</p>
       <div class="join-confirm-rate-hero">
         <span id="join-confirm-rate"><strong>{{ r.joinRate }}</strong> <span class="sat">S</span> every <strong>{{ r.joinInterval }}</strong>s</span>

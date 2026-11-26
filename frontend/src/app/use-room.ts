@@ -36,6 +36,7 @@ function createState(search: string) {
     rateVisible: !params.has('session'),
     rateSats: '2',
     rateInterval: '10',
+    freeSeconds: '0',
     receiptFee: 0,
     feeUnavailable: false,
     feeInfoOpen: false,
@@ -64,6 +65,7 @@ function createState(search: string) {
     joinVisible: false,
     joinRate: 2,
     joinInterval: 10,
+    joinFreeSeconds: 0,
     joinBalance: 0,
     joinDuration: '—',
     joinMint: '',
@@ -109,7 +111,7 @@ export interface RoomContext {
   elapsedSeconds(): number;
   showStats(initialBudget?: number): void;
   showSummary(sats: number, chunks: number): void;
-  getRate(): { rateSatsPerInterval: number; intervalSeconds: number };
+  getRate(): { rateSatsPerInterval: number; intervalSeconds: number; freeSeconds: number };
 }
 
 export function formatElapsed(seconds: number): string {
@@ -203,6 +205,7 @@ export function useRoom(services: RoomServices, search: string) {
       return {
         rateSatsPerInterval: Math.max(1, parseInt(String(state.rateSats), 10) || 2),
         intervalSeconds: Math.max(5, parseInt(String(state.rateInterval), 10) || 10),
+        freeSeconds: Math.max(0, parseInt(String(state.freeSeconds), 10) || 0),
       };
     },
   };

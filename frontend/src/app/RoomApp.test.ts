@@ -144,7 +144,7 @@ it('selects tutor without a session query and creates only after Start Session',
   expect(h.send).not.toHaveBeenCalled();
   root.querySelector<HTMLButtonElement>('#start-session-btn')!.click();
   await flush();
-  expect(h.send).toHaveBeenCalledWith({ type: 'create_session', mintUrl: 'https://mint.test', rateSatsPerInterval: 2, intervalSeconds: 10 });
+  expect(h.send).toHaveBeenCalledWith({ type: 'create_session', mintUrl: 'https://mint.test', rateSatsPerInterval: 2, intervalSeconds: 10, freeSeconds: 0 });
   expect(root.querySelector<HTMLButtonElement>('#start-session-btn')!.disabled).toBe(true);
 });
 
@@ -166,6 +166,20 @@ async function acceptViewer(h: ReturnType<typeof harness>): Promise<void> {
   h.message({ type: 'offer', sessionId: 'demo', sdp: { type: 'offer', sdp: 'fake' } });
   await flush();
 }
+
+it('delays the first charge by the free preview on the session', async () => {
+  const h = harness('?session=demo');
+  h.connect();
+  h.message({ ...created, freeSeconds: 45 });
+  await flush();
+  expect(el('join-confirm-free').textContent).toBe('Free for 45s, then the rate below.');
+  await click('join-confirm-accept');
+  h.openChannel();
+  expect(h.services.sender.createSession).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+    initialDelaySecs: 45,
+    intervalSecs: 10,
+  }));
+});
 
 it('keeps both video nodes and srcObject stable through rate, ceremony, receipt and summary updates', async () => {
   vi.useFakeTimers();

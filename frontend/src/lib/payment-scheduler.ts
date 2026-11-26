@@ -24,6 +24,8 @@ import type { PaymentSource, PaymentTransport } from '../payments/ports.js';
 export interface PaymentSchedulerOpts {
   intervalSecs: number;
   chunkSats: number;
+  /** Wait before the first charge. Defaults to intervalSecs. Later charges use intervalSecs. */
+  initialDelaySecs?: number;
   /** Initial chunkId — caller loads this from session storage. */
   initialChunkId?: number;
   /** Initial totalSatsPaid — caller loads this from session storage. */
@@ -55,6 +57,7 @@ export class PaymentScheduler {
 
   private running = false;
   private pending = false;
+  private awaitingFirstTick = true;
 
   // setTimeout handles
   private intervalHandle: ReturnType<typeof setTimeout> | null = null;
@@ -83,6 +86,7 @@ export class PaymentScheduler {
       ...opts,
       initialChunkId: opts.initialChunkId ?? 0,
       initialTotalSatsPaid: opts.initialTotalSatsPaid ?? 0,
+      initialDelaySecs: opts.initialDelaySecs ?? opts.intervalSecs,
       onStateChange: opts.onStateChange ?? (() => undefined),
     };
 
@@ -136,9 +140,11 @@ export class PaymentScheduler {
 
   private scheduleNext(): void {
     if (!this.running) return;
+    const delaySecs = this.awaitingFirstTick ? this.opts.initialDelaySecs : this.opts.intervalSecs;
+    this.awaitingFirstTick = false;
     this.intervalHandle = setTimeout(() => {
       void this.tick();
-    }, this.opts.intervalSecs * 1000);
+    }, delaySecs * 1000);
   }
 
   private async tick(): Promise<void> {

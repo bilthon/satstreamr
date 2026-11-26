@@ -12,6 +12,7 @@ export function useViewer(room: RoomContext): RoomActions {
   const sessionId = state.sessionId;
   let rate = 2;
   let interval = 10;
+  let freeSeconds = 0;
   let invitedRate: number | null = null;
   let invitedInterval: number | null = null;
   let invitedMint: string | null = null;
@@ -34,6 +35,7 @@ export function useViewer(room: RoomContext): RoomActions {
       const pending = JSON.parse(raw) as Record<string, unknown>;
       if (typeof pending['rateSatsPerInterval'] === 'number') rate = invitedRate = pending['rateSatsPerInterval'];
       if (typeof pending['intervalSeconds'] === 'number') interval = invitedInterval = pending['intervalSeconds'];
+      if (typeof pending['freeSeconds'] === 'number' && pending['freeSeconds'] >= 0) freeSeconds = Math.floor(pending['freeSeconds']);
       if (typeof pending['mintUrl'] === 'string') invitedMint = pending['mintUrl'];
     }
   } catch {
@@ -41,15 +43,14 @@ export function useViewer(room: RoomContext): RoomActions {
   }
 
   function showConfirm(dialogRate: number, dialogInterval: number, mint: string | null): void {
-    if (confirmationShown) return;
-    confirmationShown = true;
     state.joinRate = dialogRate;
     state.joinInterval = dialogInterval;
+    state.joinFreeSeconds = freeSeconds > 0 ? Math.floor(freeSeconds) : 0;
     state.joinMint = mint ?? services.mintUrl;
     const balance = payments.getBalance();
     state.joinBalance = balance;
     if (dialogRate > 0 && dialogInterval > 0 && balance > 0) {
-      const seconds = Math.floor(balance / dialogRate) * dialogInterval;
+      const seconds = Math.floor(balance / dialogRate) * dialogInterval + state.joinFreeSeconds;
       if (seconds >= 60) {
         const minutes = Math.floor(seconds / 60);
         state.joinDuration = seconds % 60 > 0 ? `~${minutes} min ${seconds % 60}s` : `~${minutes} min`;
@@ -59,6 +60,8 @@ export function useViewer(room: RoomContext): RoomActions {
     } else {
       state.joinDuration = balance === 0 ? '0 — deposit first' : '—';
     }
+    if (confirmationShown) return;
+    confirmationShown = true;
     state.joinVisible = true;
     room.focusJoin();
   }
@@ -175,6 +178,16 @@ export function useViewer(room: RoomContext): RoomActions {
         const saved = loadSession();
         const initialChunkId = saved?.chunkCount ?? 0;
         const initialTotalSatsPaid = saved?.totalSatsPaid ?? 0;
+        let initialDelaySecs = interval;
+        if (initialChunkId === 0) {
+          if (typeof saved?.freeEndsAt === 'number') {
+            const remaining = Math.ceil((saved.freeEndsAt - Date.now()) / 1000);
+            initialDelaySecs = remaining > 0 ? remaining : interval;
+          } else if (freeSeconds > 0) {
+            updateSession({ freeEndsAt: Date.now() + freeSeconds * 1000 });
+            initialDelaySecs = freeSeconds;
+          }
+        }
         totalSats = initialTotalSatsPaid;
         totalChunks = initialChunkId;
         room.showStats(payments.getBalance());
@@ -185,6 +198,7 @@ export function useViewer(room: RoomContext): RoomActions {
         scheduler = payments.createSession(dataChannel, {
           intervalSecs: interval,
           chunkSats: rate,
+          initialDelaySecs,
           initialChunkId,
           initialTotalSatsPaid,
           onStateChange: counters => updateSession({ chunkCount: counters.chunkId, totalSatsPaid: counters.totalSatsPaid }),
@@ -336,7 +350,10 @@ export function useViewer(room: RoomContext): RoomActions {
         }
         if (typeof message.rateSatsPerInterval === 'number') rate = message.rateSatsPerInterval;
         if (typeof message.intervalSeconds === 'number') interval = message.intervalSeconds;
-        if (!confirmationShown) showConfirm(rate, interval, message.mintUrl);
+        if (typeof message.freeSeconds === 'number' && Number.isFinite(message.freeSeconds)) {
+          freeSeconds = Math.max(0, Math.floor(message.freeSeconds));
+        }
+        showConfirm(rate, interval, message.mintUrl);
         void decision.then(accepted => {
           if (!accepted || !active()) return;
           ui.setStatus('preparing wallet…');
