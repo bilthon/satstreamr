@@ -10,6 +10,7 @@ export interface InvitePayload {
   rateSatsPerInterval: number;
   intervalSeconds: number;
   mintUrl: string;
+  freeSeconds?: number;
 }
 
 /**
@@ -52,11 +53,15 @@ export function parseInvite(encoded: string): InvitePayload | null {
       return null;
     }
 
+    const freeSeconds = typeof obj['freeSeconds'] === 'number' && obj['freeSeconds'] >= 0
+      ? Math.floor(obj['freeSeconds'])
+      : undefined;
     return {
       sessionId: obj['sessionId'],
       rateSatsPerInterval: obj['rateSatsPerInterval'],
       intervalSeconds: obj['intervalSeconds'],
       mintUrl: obj['mintUrl'],
+      ...(freeSeconds !== undefined ? { freeSeconds } : {}),
     };
   } catch {
     return null;

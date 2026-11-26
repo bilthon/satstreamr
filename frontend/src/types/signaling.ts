@@ -28,6 +28,7 @@ export interface CreateSessionMessage {
   mintUrl: string;
   rateSatsPerInterval?: number;
   intervalSeconds?: number;
+  freeSeconds?: number;
 }
 
 export interface JoinSessionMessage {
@@ -91,6 +92,7 @@ export interface SessionCreatedMessage {
   mintUrl: string;
   rateSatsPerInterval?: number;
   intervalSeconds?: number;
+  freeSeconds?: number;
   iceServers?: SignalingIceServer[];
 }
 

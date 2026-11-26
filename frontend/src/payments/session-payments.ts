@@ -13,6 +13,8 @@ export interface SendingSession {
 export interface SendingSessionOptions {
   intervalSecs: number;
   chunkSats: number;
+  /** Wait before the first charge. Defaults to intervalSecs. */
+  initialDelaySecs?: number;
   initialChunkId?: number;
   initialTotalSatsPaid?: number;
   onStateChange?: (state: { chunkId: number; totalSatsPaid: number }) => void;

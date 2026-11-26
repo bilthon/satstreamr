@@ -3,7 +3,7 @@ import { PaymentScheduler } from './payment-scheduler.js';
 import type { DataChannelMessage } from '../types/data-channel.js';
 
 // No wallet module mock: each scheduler owns its injected balance/preparation.
-function setup(initialBalance = 100, initialChunkId = 0, initialTotalSatsPaid = 0) {
+function setup(initialBalance = 100, initialChunkId = 0, initialTotalSatsPaid = 0, initialDelaySecs?: number) {
   let balance = initialBalance;
   let inbound: (msg: DataChannelMessage) => void = () => undefined;
   const sent: DataChannelMessage[] = [];
@@ -23,6 +23,7 @@ function setup(initialBalance = 100, initialChunkId = 0, initialTotalSatsPaid = 
   const scheduler = new PaymentScheduler(transport, { getBalance, preparePayment }, {
     intervalSecs: 10,
     chunkSats: 1,
+    ...(initialDelaySecs !== undefined ? { initialDelaySecs } : {}),
     initialChunkId,
     initialTotalSatsPaid,
     onStateChange: stateChanged,
@@ -40,6 +41,21 @@ function setup(initialBalance = 100, initialChunkId = 0, initialTotalSatsPaid = 
 describe('PaymentScheduler', () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); vi.clearAllMocks(); });
+
+  it('charges after the free preview, then on the normal interval', async () => {
+    const t = setup(100, 0, 0, 30);
+    t.scheduler.start();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(t.payments()).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(t.payments()).toHaveLength(1);
+    t.receive({ type: 'payment_ack', chunkId: 0 });
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(t.payments()).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(t.payments()[1]?.chunkId).toBe(1);
+    t.scheduler.stop();
+  });
 
   it('happy path: three intervals persist three paid chunks', async () => {
     const t = setup();

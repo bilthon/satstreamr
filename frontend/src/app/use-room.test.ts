@@ -66,10 +66,14 @@ it('characterizes tutor rate consent, fees and the default create-session messag
   expect(el('effective-rate-display').textContent).toBe('12.0');
   expect(el('fee-overhead-display').textContent).toContain('~1 S/cycle (~50%)');
   expect(mock.send).not.toHaveBeenCalled();
+  const free = el('free-seconds-input') as HTMLInputElement;
+  free.value = '45';
+  free.dispatchEvent(new Event('input', { bubbles: true }));
+  await flush();
   el('start-session-btn').click();
   await flush();
   expect(mock.send).toHaveBeenCalledExactlyOnceWith({
-    type: 'create_session', mintUrl: 'https://mint.test', rateSatsPerInterval: 2, intervalSeconds: 10,
+    type: 'create_session', mintUrl: 'https://mint.test', rateSatsPerInterval: 2, intervalSeconds: 10, freeSeconds: 45,
   });
   expect((el('start-session-btn') as HTMLButtonElement).disabled).toBe(true);
 });
@@ -78,13 +82,14 @@ it('characterizes viewer manual join without media or preparation before consent
   window.history.replaceState({}, '', '/room.html?session=demo');
   await import('../pages/room.js');
   mock.connect();
-  mock.message({ type: 'session_created', sessionId: 'demo', mintUrl: 'https://mint.test', rateSatsPerInterval: 2, intervalSeconds: 10 });
+  mock.message({ type: 'session_created', sessionId: 'demo', mintUrl: 'https://mint.test', rateSatsPerInterval: 2, intervalSeconds: 10, freeSeconds: 60 });
   await flush();
   expect(el('rate-config').style.display).toBe('none');
   expect(el('session-display').textContent).toBe('Session: demo');
   expect(el('join-confirm-overlay').classList.contains('hidden')).toBe(false);
   expect(el('join-confirm-rate').textContent).toBe('2 S every 10s');
-  expect(el('join-confirm-duration').textContent).toBe('~1 min 40s');
+  expect(el('join-confirm-free').textContent).toBe('Free for 60s, then the rate below.');
+  expect(el('join-confirm-duration').textContent).toBe('~2 min 40s');
   expect(mock.send).toHaveBeenCalledWith({ type: 'join_session', sessionId: 'demo' });
   expect(mock.media).not.toHaveBeenCalled();
   expect(mock.prepare).not.toHaveBeenCalled();
