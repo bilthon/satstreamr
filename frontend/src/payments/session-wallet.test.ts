@@ -49,7 +49,7 @@ describe('session wallet', () => {
     expect(sdk.quote).not.toHaveBeenCalled();
   });
 
-  it.each(['quote', 'refetch', 'melt', 'unpaid', 'paid-no-change'])('preserves wallet accounting for %s', async failure => {
+  it.each(['quote', 'refetch', 'melt', 'unpaid'])('preserves wallet accounting for %s', async failure => {
     setProofs([proof(20)]);
     const cashOut = createCashuWallet().createCashOut();
     const changes: number[] = [];
@@ -68,9 +68,8 @@ describe('session wallet', () => {
         sdk.melt.mockRejectedValue(new Error('payment failed'));
         await expect(quote.pay()).rejects.toThrow('payment failed');
       } else {
-        const paid = failure === 'paid-no-change';
-        sdk.melt.mockResolvedValue({ quote: { state: paid ? 'PAID' : 'UNPAID' }, change: paid ? [] : [proof(2)] });
-        expect(await quote.pay()).toEqual({ paid, changeSats: 0 });
+        sdk.melt.mockResolvedValue({ quote: { state: 'UNPAID' }, change: [proof(2)] });
+        expect(await quote.pay()).toEqual({ paid: false, changeSats: 0 });
       }
     }
     unsubscribe();
@@ -90,7 +89,7 @@ describe('session wallet', () => {
     expect(getBalance()).toBe(0);
   });
 
-  it('keeps the captured funds, refetches the quote, and appends paid change only', async () => {
+  it('replaces the captured proofs with the mint change and keeps funds received after the snapshot', async () => {
     setProofs([proof(20)]);
     const cashOut = createCashuWallet().createCashOut();
     expect(cashOut.hasFunds).toBe(true);
@@ -105,8 +104,16 @@ describe('session wallet', () => {
     unsubscribe();
     expect(sdk.quote).toHaveBeenCalledTimes(2);
     expect(sdk.melt).toHaveBeenCalledWith({ quote: 'fresh-id', amount: 11, fee_reserve: 2 }, [proof(20)]);
-    // Characterize existing accounting: original inputs are NOT removed here.
-    expect(getProofs()).toEqual([proof(20), proof(5), proof(2)]);
-    expect(changes).toEqual([27]);
+    expect(getProofs()).toEqual([proof(5), proof(2)]);
+    expect(getBalance()).toBe(7);
+  });
+
+  it('drops the captured proofs when the mint pays and returns no change', async () => {
+    setProofs([proof(20)]);
+    const quote = await createCashuWallet().createCashOut().quote('invoice');
+    sdk.melt.mockResolvedValue({ quote: { state: 'PAID' }, change: [] });
+    expect(await quote.pay()).toEqual({ paid: true, changeSats: 0 });
+    expect(getProofs()).toEqual([]);
+    expect(getBalance()).toBe(0);
   });
 });
