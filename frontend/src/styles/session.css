@@ -321,12 +321,28 @@ html {
   color: var(--color-text-secondary);
 }
 
+#session-summary-card .summary-row.deduction .label {
+  color: var(--color-error);
+}
+
+#session-summary-card .summary-row.available .label {
+  color: var(--color-success);
+}
+
 #session-summary-card .summary-row .value {
   font-weight: 600;
   font-family: var(--font-mono);
   color: var(--color-text-accent);
   font-size: 1.05rem;
   font-variant-numeric: tabular-nums;
+}
+
+#session-summary-card .summary-row.deduction .value {
+  color: var(--color-error);
+}
+
+#session-summary-card .summary-row.available .value {
+  color: var(--color-success);
 }
 
 #session-summary-card #summary-close-btn {

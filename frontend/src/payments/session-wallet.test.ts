@@ -108,6 +108,12 @@ describe('session wallet', () => {
     expect(getBalance()).toBe(7);
   });
 
+  it('explains the melt fee and lightning reserve for the captured balance', async () => {
+    setProofs([proof(14)]);
+    const limit = await createCashuWallet().createCashOut().explain();
+    expect(limit).toEqual({ balance: 14, inputFee: 1, lightningBuffer: 2, maxAmount: 11 });
+  });
+
   it('drops the captured proofs when the mint pays and returns no change', async () => {
     setProofs([proof(20)]);
     const quote = await createCashuWallet().createCashOut().quote('invoice');

@@ -39,7 +39,12 @@ function harness(search = '', balance = 20, options?: { distinctPeers?: boolean 
   const stream = { getTracks: () => [{ stop: stopTrack }] } as unknown as MediaStream;
   const receiver = { receive: vi.fn(), reset: vi.fn() };
   const quote = { amount: 10, feeReserve: 2, inputFee: 1, pay: vi.fn().mockResolvedValue({ paid: true, changeSats: 1 }) };
-  const cashOut = { hasFunds: true, quote: vi.fn().mockResolvedValue(quote) };
+  const cashOut = {
+    hasFunds: true,
+    balance: 14,
+    explain: vi.fn().mockResolvedValue({ balance: 14, inputFee: 3, lightningBuffer: 2, maxAmount: 9 }),
+    quote: vi.fn().mockResolvedValue(quote),
+  };
   let message = (_message: SignalingMessage) => {};
   const send = vi.fn();
   const client = {
@@ -264,7 +269,6 @@ it('keeps both video nodes and srcObject stable through rate, ceremony, receipt 
   await click('exit-session-btn');
   expect(el('session-summary-overlay').classList.contains('visible')).toBe(true);
   expect(el('summary-sats').textContent).toBe('2');
-  expect(el('summary-chunks').textContent).toBe('1');
   expect(el('local-video')).toBe(local);
   expect(el('remote-video')).toBe(remote);
   expect(remote.srcObject).toBe(remoteStream);
@@ -430,7 +434,6 @@ it('restores viewer counters, updates budget, pauses/reconnects and releases cha
   expect(h.unsubscribe).toHaveBeenCalledOnce();
   await click('exit-session-btn');
   expect(el('summary-sats').textContent).toBe('10');
-  expect(el('summary-chunks').textContent).toBe('5');
   app!.unmount(); app = undefined;
   await vi.advanceTimersByTimeAsync(0);
   expect(vi.getTimerCount()).toBe(0);
@@ -469,6 +472,9 @@ it.each(['paid', 'unpaid', 'quote-error', 'pay-error'] as const)('preserves tuto
   await vi.advanceTimersByTimeAsync(3400); await flush();
   await click('exit-session-btn');
   expect(h.services.wallet.createCashOut).toHaveBeenCalledOnce();
+  expect(el('summary-melt-fee').textContent).toContain('3');
+  expect(el('summary-lightning').textContent).toContain('2');
+  expect(el('summary-available').textContent).toContain('9');
   await input('invoice-input', 'wrong');
   expect(el('cashout-status').textContent).toContain('Invalid invoice');
   await click('pay-invoice-btn');
@@ -482,6 +488,12 @@ it.each(['paid', 'unpaid', 'quote-error', 'pay-error'] as const)('preserves tuto
   const expected = { paid: '✓ Payment sent! (1 sats fee change returned)', unpaid: 'Payment not confirmed by mint. Please retry.', 'quote-error': 'quote offline', 'pay-error': 'pay offline' };
   expect(el('cashout-status').textContent).toBe(expected[outcome]);
   expect(el<HTMLButtonElement>('pay-invoice-btn').disabled).toBe(outcome === 'paid');
+  if (outcome === 'paid') {
+    expect(el('summary-melt-fee').textContent).toContain('1');
+    expect(el('summary-lightning').textContent).toContain('2');
+    expect(el('summary-available').textContent).toContain('11');
+    expect(el('summary-available').textContent).not.toContain('~');
+  }
 });
 
 it('lets an in-flight receipt finish after disposal without sending on the closed view transport', async () => {

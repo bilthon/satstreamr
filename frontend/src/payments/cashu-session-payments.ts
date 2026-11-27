@@ -1,5 +1,5 @@
 import { getDecodedToken, getEncodedToken } from '@cashu/cashu-ts';
-import { buildWallet, checkTokenState, claimProofs, getMeltQuote, meltTokens, preSplitProofs } from '../lib/cashu-wallet.js';
+import { buildWallet, checkTokenState, claimProofs, getMeltQuote, meltSpendLimit, meltTokens, preSplitProofs } from '../lib/cashu-wallet.js';
 import { addProofs, getBalance, getProofs, onBalanceChange, setProofs, spendProofs } from '../lib/wallet-store.js';
 import { getMintUrl } from '../lib/config.js';
 import { PaymentScheduler } from '../lib/payment-scheduler.js';
@@ -32,8 +32,14 @@ export function createCashuWallet(): SessionWallet {
     },
     createCashOut() {
       const proofs = getProofs();
+      const balance = proofs.reduce((sum, proof) => sum + proof.amount, 0);
       return {
         hasFunds: proofs.length > 0,
+        balance,
+        async explain() {
+          const { wallet } = await buildWallet();
+          return meltSpendLimit(balance, wallet.getFeesForProofs(proofs));
+        },
         async quote(invoice) {
           const quote = await getMeltQuote(invoice, proofs);
           const totalNeeded = quote.amount + quote.fee_reserve + quote.inputFee;

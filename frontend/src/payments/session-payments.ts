@@ -44,8 +44,18 @@ export interface ReceiptCallbacks {
 /** A wallet snapshot taken when the cash-out UI is wired, not at quote/payment time. */
 export interface CashOut {
   readonly hasFunds: boolean;
+  readonly balance: number;
+  /** Melt fee and lightning reserve for this snapshot, before an invoice exists. */
+  explain(): Promise<MeltSpendLimit>;
   /** Validates affordability against the snapshot; errors retain displayable reasons. */
   quote(invoice: string): Promise<CashOutQuote>;
+}
+
+export interface MeltSpendLimit {
+  balance: number;
+  inputFee: number;
+  lightningBuffer: number;
+  maxAmount: number;
 }
 
 export interface CashOutQuote {
