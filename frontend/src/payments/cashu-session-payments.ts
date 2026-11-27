@@ -1,6 +1,6 @@
 import { getDecodedToken, getEncodedToken } from '@cashu/cashu-ts';
 import { buildWallet, checkTokenState, claimProofs, getMeltQuote, meltTokens, preSplitProofs } from '../lib/cashu-wallet.js';
-import { addProofs, getBalance, getProofs, onBalanceChange, spendProofs } from '../lib/wallet-store.js';
+import { addProofs, getBalance, getProofs, onBalanceChange, setProofs, spendProofs } from '../lib/wallet-store.js';
 import { getMintUrl } from '../lib/config.js';
 import { PaymentScheduler } from '../lib/payment-scheduler.js';
 import type { ReceiptCallbacks, SessionReceiver, SessionSender, SessionWallet } from './session-payments.js';
@@ -52,8 +52,11 @@ export function createCashuWallet(): SessionWallet {
               const changeSats = result.paid
                 ? result.change.reduce((sum, proof) => sum + proof.amount, 0)
                 : 0;
-              // Preserve existing cash-out accounting: append paid change only.
-              if (result.paid && result.change.length > 0) addProofs(result.change);
+              if (result.paid) {
+                const spent = new Set(proofs.map(proof => proof.secret));
+                const kept = getProofs().filter(proof => !spent.has(proof.secret));
+                setProofs([...kept, ...result.change]);
+              }
               return { paid: result.paid, changeSats };
             },
           };
