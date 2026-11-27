@@ -132,8 +132,10 @@ You also need a Python virtual environment with Nutshell installed:
 ```bash
 cd infra
 python3 -m venv nutshell-venv
-nutshell-venv/bin/pip install cashu==0.19.2
+nutshell-venv/bin/pip install -r requirements-mint.lock.txt
 ```
+
+`requirements-mint.lock.txt` pins Nutshell (`cashu==0.19.2`) and every dependency to versions known to work. Installing `cashu==0.19.2` alone pulls the newest dependencies, and some of them break Nutshell (for example `marshmallow` 4 fails with `AttributeError: module 'marshmallow' has no attribute '__version_info__'`).
 
 Then start the mint:
 
@@ -324,7 +326,7 @@ Stale proof state in `localStorage` from an interrupted previous session. Open D
 Chrome and Safari on mobile aggressively suspend background tabs. The signaling client uses exponential backoff reconnection, but a fully frozen tab cannot execute JavaScript. Keep the browser tab in the foreground during a session.
 
 **`start-mint.sh` fails with "No such file or directory: nutshell-venv/bin/mint"**
-The Python virtual environment has not been created. See Step 2 for the `python3 -m venv` and `pip install cashu==0.19.2` commands.
+The Python virtual environment has not been created. See Step 2 for the `python3 -m venv` and `pip install -r requirements-mint.lock.txt` commands. If you moved the project directory, recreate the venv: its launchers keep the old absolute path.
 
 ---
 
