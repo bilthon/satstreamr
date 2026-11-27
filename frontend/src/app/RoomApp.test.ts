@@ -470,11 +470,13 @@ it.each(['paid', 'unpaid', 'quote-error', 'pay-error'] as const)('preserves tuto
   const h = harness();
   h.connect(); h.message(created); await flush();
   await vi.advanceTimersByTimeAsync(3400); await flush();
+  h.receive(42);
   await click('exit-session-btn');
   expect(h.services.wallet.createCashOut).toHaveBeenCalledOnce();
+  expect(el('summary-sats').textContent).toBe('42');
   expect(el('summary-melt-fee').textContent).toContain('3');
   expect(el('summary-lightning').textContent).toContain('2');
-  expect(el('summary-available').textContent).toContain('9');
+  expect(el('summary-available').textContent).toContain('37');
   await input('invoice-input', 'wrong');
   expect(el('cashout-status').textContent).toContain('Invalid invoice');
   await click('pay-invoice-btn');
@@ -491,7 +493,7 @@ it.each(['paid', 'unpaid', 'quote-error', 'pay-error'] as const)('preserves tuto
   if (outcome === 'paid') {
     expect(el('summary-melt-fee').textContent).toContain('1');
     expect(el('summary-lightning').textContent).toContain('2');
-    expect(el('summary-available').textContent).toContain('11');
+    expect(el('summary-available').textContent).toContain('39');
     expect(el('summary-available').textContent).not.toContain('~');
   }
 });

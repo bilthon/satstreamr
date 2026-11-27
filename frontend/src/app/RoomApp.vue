@@ -27,7 +27,7 @@ const {
 const cashoutAvailable = computed(() => {
   const funds = r.cashoutFunds;
   if (!funds) return 0;
-  return Math.max(0, funds.balance - funds.meltFee - funds.lightning);
+  return Math.max(0, (r.summarySats ?? 0) - funds.meltFee - funds.lightning);
 });
 </script>
 
