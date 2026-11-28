@@ -11,6 +11,13 @@ import type { DataChannelMessage } from '../types/data-channel.js';
 import { MintMismatchError } from '../lib/mint-guard.js';
 import { saveSession, loadSession } from '../lib/session-storage.js';
 
+const played: string[] = [];
+vi.stubGlobal('Audio', class {
+  currentTime = 0;
+  constructor(readonly src: string) {}
+  play() { played.push(this.src); return Promise.resolve(); }
+});
+
 let app: App | undefined;
 let root: HTMLDivElement;
 const flush = async (): Promise<void> => { for (let i = 0; i < 12; i++) await nextTick(); };
@@ -138,6 +145,7 @@ afterEach(() => {
   root?.remove();
   localStorage.clear();
   sessionStorage.clear();
+  played.length = 0;
   vi.useRealTimers();
 });
 
@@ -601,4 +609,86 @@ it('keeps the answer status when wallet preparation finishes afterwards', async 
   resolvePrepare(10);
   await flush();
   expect(el('status').textContent).toBe('answer sent -- waiting for ICE…');
+});
+
+const muteButton = () => el<HTMLButtonElement>('tip-sound-mute');
+const soundChoice = () => el<HTMLSelectElement>('tip-sound-choice');
+async function choose(value: string): Promise<void> {
+  soundChoice().value = value;
+  soundChoice().dispatchEvent(new Event('change', { bubbles: true }));
+  await flush();
+}
+function remount(search = ''): ReturnType<typeof harness> {
+  app!.unmount();
+  root.remove();
+  return harness(search);
+}
+
+it('shows the tip sound controls to the tutor only', async () => {
+  harness();
+  await flush();
+  expect(muteButton().getAttribute('aria-label')).toBe('Mute tip sound');
+  expect(muteButton().getAttribute('aria-pressed')).toBe('false');
+  expect(soundChoice().getAttribute('aria-label')).toBe('Tip sound');
+  expect(soundChoice().value).toBe('sats-zap');
+  expect([...soundChoice().options].map(option => option.textContent)).toEqual(['Zap', 'Coin', 'Sparkle', 'Cash register', 'Off']);
+
+  remount('?session=demo');
+  await flush();
+  expect(root.querySelector('#tip-sound-mute')).toBeNull();
+  expect(root.querySelector('#tip-sound-choice')).toBeNull();
+});
+
+it('mutes and unmutes the tip sound and remembers it across a remount', async () => {
+  harness();
+  await flush();
+  await click('tip-sound-mute');
+  expect(played).toEqual([]);
+  expect(muteButton().getAttribute('aria-label')).toBe('Unmute tip sound');
+  expect(muteButton().getAttribute('aria-pressed')).toBe('true');
+  expect(soundChoice().value).toBe('off');
+
+  remount();
+  await flush();
+  expect(muteButton().getAttribute('aria-pressed')).toBe('true');
+  expect(soundChoice().value).toBe('off');
+  await click('tip-sound-mute');
+  expect(muteButton().getAttribute('aria-label')).toBe('Mute tip sound');
+  expect(soundChoice().value).toBe('sats-zap');
+  expect(played).toHaveLength(1);
+  expect(played[0]).toContain('sats-zap.mp3');
+});
+
+it('previews a chosen sound, treats Off as mute, and remembers the choice across a remount', async () => {
+  harness();
+  await flush();
+  await choose('sats-coin');
+  expect(played).toHaveLength(1);
+  expect(played[0]).toContain('sats-coin.mp3');
+  await choose('off');
+  expect(played).toHaveLength(1);
+  expect(muteButton().getAttribute('aria-pressed')).toBe('true');
+
+  remount();
+  await flush();
+  expect(soundChoice().value).toBe('off');
+  await click('tip-sound-mute');
+  expect(soundChoice().value).toBe('sats-coin');
+  expect(played.at(-1)).toContain('sats-coin.mp3');
+});
+
+it('plays the tip sound for a claimed payment unless muted', async () => {
+  const h = harness();
+  h.openChannel();
+  h.receive(2);
+  await flush();
+  expect(el('sats-received').textContent).toContain('2');
+  expect(played).toHaveLength(1);
+  expect(played[0]).toContain('sats-zap.mp3');
+
+  await click('tip-sound-mute');
+  h.receive(3);
+  await flush();
+  expect(el('sats-received').textContent).toContain('5');
+  expect(played).toHaveLength(1);
 });

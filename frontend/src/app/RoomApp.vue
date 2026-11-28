@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { formatElapsed, useRoom, type RoomServices } from './use-room.js';
+import { TIP_SOUNDS, loadTipSound, playTipSound, previewTipSound, saveTipSound, type TipSoundPreference } from '../lib/tip-sound.js';
 
 const props = defineProps<{
   services: RoomServices;
@@ -29,6 +30,30 @@ const cashoutAvailable = computed(() => {
   if (!funds) return 0;
   return Math.max(0, (r.summarySats ?? 0) - funds.meltFee - funds.lightning);
 });
+
+const tipSound = ref(loadTipSound());
+function setTipSound(preference: TipSoundPreference): void {
+  tipSound.value = preference;
+  saveTipSound(preference);
+}
+function toggleTipSound(): void {
+  const muted = !tipSound.value.muted;
+  setTipSound({ sound: tipSound.value.sound, muted });
+  if (!muted) playTipSound();
+}
+const tipSoundChoice = computed({
+  get: () => tipSound.value.muted ? 'off' : tipSound.value.sound,
+  set(choice: string) {
+    if (choice === 'off') {
+      setTipSound({ sound: tipSound.value.sound, muted: true });
+      return;
+    }
+    const sound = TIP_SOUNDS.find(entry => entry.id === choice)?.id;
+    if (sound === undefined) return;
+    setTipSound({ sound, muted: false });
+    previewTipSound(sound);
+  },
+});
 </script>
 
 <template>
@@ -37,6 +62,19 @@ const cashoutAvailable = computed(() => {
     <span id="status">{{ r.status }}</span>
     <span class="status-sep">&middot;</span>
     <span id="dc-status">payment channel: {{ r.dcStatus }}</span>
+    <span v-if="r.role === 'tutor'" class="tip-sound">
+      <button id="tip-sound-mute" type="button" class="tip-sound-mute" :aria-label="tipSound.muted ? 'Unmute tip sound' : 'Mute tip sound'" :aria-pressed="tipSound.muted" @click="toggleTipSound">
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M2 6h2.5L8 3v10L4.5 10H2z" fill="currentColor" />
+          <path v-if="tipSound.muted" d="M11 6l4 4M15 6l-4 4" />
+          <path v-else d="M10.5 5.5a3.5 3.5 0 0 1 0 5M12.5 3.5a6.5 6.5 0 0 1 0 9" />
+        </svg>
+      </button>
+      <select id="tip-sound-choice" class="tip-sound-choice" aria-label="Tip sound" v-model="tipSoundChoice">
+        <option v-for="sound in TIP_SOUNDS" :key="sound.id" :value="sound.id">{{ sound.label }}</option>
+        <option value="off">Off</option>
+      </select>
+    </span>
   </div>
   <p id="session-display">{{ r.sessionDisplay }}</p>
 
