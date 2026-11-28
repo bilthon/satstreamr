@@ -3,6 +3,7 @@ import type { DataChannel } from '../lib/data-channel.js';
 import { saveSession, loadSession, clearSession } from '../lib/session-storage.js';
 import { createInviteUrl } from '../lib/session-invite.js';
 import { wireSharedPeerHandlers } from '../lib/peer-setup.js';
+import { playTipSound } from '../lib/tip-sound.js';
 import { formatElapsed, type RoomActions, type RoomContext } from './use-room.js';
 
 /** Tutor orchestration retains the existing receipt, signaling and cash-out order. */
@@ -34,6 +35,7 @@ export function useTutor(room: RoomContext): RoomActions {
       totalSats += amount;
       totalChunks++;
       if (!active()) return;
+      playTipSound();
       state.satsReceived = totalSats;
       state.paymentFloat = amount;
       const animation = ++state.paymentAnimation;
