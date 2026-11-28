@@ -83,8 +83,14 @@ function createState(search: string) {
     cashoutStatus: '',
     cashoutError: false,
     cashoutAmount: null as number | null,
-    cashoutFee: 0,
     cashoutDisabled: false,
+    cashoutFunds: null as null | {
+      balance: number;
+      meltFee: number;
+      lightning: number;
+      estimated: boolean;
+      maxInvoice: number;
+    },
     toast: false,
   });
 }

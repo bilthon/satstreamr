@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { formatElapsed, useRoom, type RoomServices } from './use-room.js';
 
 const props = defineProps<{
@@ -22,6 +23,12 @@ const {
   payInvoice,
   finishCeremony,
 } = useRoom(props.services, props.search);
+
+const cashoutAvailable = computed(() => {
+  const funds = r.cashoutFunds;
+  if (!funds) return 0;
+  return Math.max(0, (r.summarySats ?? 0) - funds.meltFee - funds.lightning);
+});
 </script>
 
 <template>
@@ -181,10 +188,20 @@ const {
         <span class="label">Total <span class="sat">S</span> exchanged</span>
         <span class="value" id="summary-sats">{{ r.summarySats ?? '—' }}</span>
       </div>
-      <div class="summary-row">
-        <span class="label">Chunks paid</span>
-        <span class="value" id="summary-chunks">{{ r.summaryChunks ?? '—' }}</span>
-      </div>
+      <template v-if="r.cashoutFunds">
+        <div class="summary-row deduction">
+          <span class="label">Melt fee</span>
+          <span class="value" id="summary-melt-fee">−{{ r.cashoutFunds.meltFee }} <span class="sat">S</span></span>
+        </div>
+        <div class="summary-row deduction">
+          <span class="label">Lightning reserve</span>
+          <span class="value" id="summary-lightning">−{{ r.cashoutFunds.lightning }} <span class="sat">S</span></span>
+        </div>
+        <div class="summary-row available">
+          <span class="label">Available</span>
+          <span class="value" id="summary-available">{{ r.cashoutFunds.estimated ? '~' : '' }}{{ cashoutAvailable }} <span class="sat">S</span></span>
+        </div>
+      </template>
       <div id="cashout-section">
         <h3>Cash Out</h3>
         <div id="invoice-input-row">
@@ -192,7 +209,7 @@ const {
           <span id="invoice-countdown" :style="{ color: r.invoiceUrgent ? '#dc2626' : '' }">{{ r.invoiceCountdown }}</span>
         </div>
         <button id="pay-invoice-btn" type="button" :disabled="r.cashoutDisabled" @click="payInvoice">Pay Invoice</button>
-        <div id="cashout-status" :style="{ color: r.cashoutError ? '#dc2626' : '' }"><template v-if="r.cashoutAmount !== null">Paying {{ r.cashoutAmount }} <span class="sat">S</span> + up to {{ r.cashoutFee }} <span class="sat">S</span> fee…</template><template v-else>{{ r.cashoutStatus }}</template></div>
+        <div id="cashout-status" :style="{ color: r.cashoutError ? '#dc2626' : '' }"><template v-if="r.cashoutAmount !== null">Paying {{ r.cashoutAmount }} <span class="sat">S</span></template><template v-else>{{ r.cashoutStatus }}</template></div>
       </div>
       <button id="summary-close-btn" type="button" @click="closeSummary">Close</button>
     </div>

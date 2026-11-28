@@ -89,6 +89,20 @@ export function useTutor(room: RoomContext): RoomActions {
       room.showSummary(totalSats, totalChunks);
       // Preserve capture-at-summary semantics rather than capturing at Pay.
       cashOut = services.wallet.createCashOut();
+      if (cashOut.hasFunds) {
+        void cashOut.explain().then(limit => {
+          if (!room.alive()) return;
+          state.cashoutFunds = {
+            balance: limit.balance,
+            meltFee: limit.inputFee,
+            lightning: limit.lightningBuffer,
+            estimated: true,
+            maxInvoice: limit.maxAmount,
+          };
+        }).catch(error => {
+          console.warn('[tutor] could not explain cash-out fees:', error);
+        });
+      }
     }
   }
 
@@ -269,7 +283,14 @@ export function useTutor(room: RoomContext): RoomActions {
     if (room.alive()) {
       state.cashoutStatus = '';
       state.cashoutAmount = quote.amount;
-      state.cashoutFee = quote.feeReserve + quote.inputFee;
+      if (state.cashoutFunds) {
+        state.cashoutFunds = {
+          ...state.cashoutFunds,
+          meltFee: quote.inputFee,
+          lightning: quote.feeReserve,
+          estimated: false,
+        };
+      }
     }
 
     // View disposal cannot abandon a submitted quote/payment. Only presentation

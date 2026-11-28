@@ -215,16 +215,17 @@ export async function meltTokens(
 // Withdraw estimation
 // ---------------------------------------------------------------------------
 
-/**
- * Estimates the maximum amount a user can withdraw via Lightning melt.
- *
- * Accounts for:
- *   - NUT-02 input fee: ceil(n_proofs * input_fee_ppk / 1000)
- *   - Lightning fee buffer: max(3, ceil(balance * 0.01)) — conservative estimate
- *     since the actual fee_reserve is unknown until an invoice exists.
- *
- * @returns maxAmount (safe invoice amount), inputFee, lightningBuffer, and balance.
- */
+/** How large an invoice can be once the melt fee and a lightning reserve are set aside. */
+export function meltSpendLimit(balance: number, inputFee: number): {
+  balance: number;
+  inputFee: number;
+  lightningBuffer: number;
+  maxAmount: number;
+} {
+  const lightningBuffer = Math.max(2, Math.ceil(balance * 0.01));
+  return { balance, inputFee, lightningBuffer, maxAmount: Math.max(0, balance - inputFee - lightningBuffer) };
+}
+
 export async function estimateMaxWithdrawable(): Promise<{
   maxAmount: number;
   inputFee: number;
@@ -234,10 +235,7 @@ export async function estimateMaxWithdrawable(): Promise<{
   const { wallet } = await buildWallet();
   const proofs = getProofs();
   const balance = proofs.reduce((s, p) => s + p.amount, 0);
-  const inputFee = wallet.getFeesForProofs(proofs);
-  const lightningBuffer = Math.max(2, Math.ceil(balance * 0.01));
-  const maxAmount = Math.max(0, balance - inputFee - lightningBuffer);
-  return { maxAmount, inputFee, lightningBuffer, balance };
+  return meltSpendLimit(balance, wallet.getFeesForProofs(proofs));
 }
 
 /**
