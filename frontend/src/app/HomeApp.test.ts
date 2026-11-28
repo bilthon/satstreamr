@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import HomeApp from './HomeApp.vue';
 import QRCode from 'qrcode';
 import type { HomeWallet, HomeWalletSnapshot, WalletStatus } from '../payments/home-wallet.js';
+import packageJson from '../../package.json';
 
 vi.mock('qrcode', () => ({ default: { toCanvas: vi.fn().mockResolvedValue(undefined) } }));
 let app: App | undefined;
@@ -236,6 +237,9 @@ it('preserves the original ID order and top-level layout without a wrapper', () 
     'deposit-footer', 'deposit-reset-btn', 'deposit-close-btn',
   ]);
   expect(root.querySelector('footer a')?.getAttribute('href')).toBe('/about.html');
+  const stamp = root.querySelector('footer .build-stamp')?.textContent;
+  expect(stamp).toBe(__BUILD_STAMP_LABEL__);
+  expect(stamp?.startsWith(`v${packageJson.version}`)).toBe(true);
   expect(control('session-history-list').textContent).toBe('No sessions yet.');
 });
 

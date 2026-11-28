@@ -2,6 +2,8 @@
 import type { HomeWallet } from '../payments/home-wallet.js';
 import { useHome } from './use-home.js';
 
+const buildStamp = __BUILD_STAMP_LABEL__;
+
 const props = defineProps<{
   wallet: HomeWallet;
   navigate: (url: string) => void;
@@ -220,5 +222,6 @@ const {
     <a href="https://njump.me/npub1qqqqqzwwsdha2f5fvel4gtj02rgnw9syyuv4hqywg8unucgc9e3qxsll4h" target="_blank" rel="noopener noreferrer">Nostr</a>
     <span class="sep">·</span>
     <a href="mailto:satstreamr.ouqux@aleeas.com">Email</a>
+    <span class="build-stamp">{{ buildStamp }}</span>
   </footer>
 </template>

@@ -1,16 +1,42 @@
 /// <reference types="vitest" />
 import { defineConfig } from 'vite'
+import { execSync } from 'child_process'
+import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import { fileURLToPath } from 'url'
 import basicSsl from '@vitejs/plugin-basic-ssl'
 import vue from '@vitejs/plugin-vue'
+import { buildStampLabel, injectBuildStamp, resolveBuildStamp } from './src/build-stamp'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
+function readGitHead(): string | undefined {
+  try {
+    return execSync('git rev-parse HEAD', { cwd: __dirname, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+  } catch {
+    return undefined
+  }
+}
+
+const { version } = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8')) as { version: string }
+const buildStamp = buildStampLabel(resolveBuildStamp({
+  version,
+  envCommit: process.env.SATSTREAMR_COMMIT,
+  githubSha: process.env.GITHUB_SHA,
+  gitHead: readGitHead(),
+}))
+
 export default defineConfig({
+  define: {
+    __BUILD_STAMP_LABEL__: JSON.stringify(buildStamp),
+  },
   plugins: [
     vue(),
     basicSsl(),
+    {
+      name: 'satstreamr-build-stamp',
+      transformIndexHtml: (html) => injectBuildStamp(html, buildStamp),
+    },
   ],
   build: {
     target: 'esnext',
